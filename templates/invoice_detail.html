@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} - Crusher Billing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-receipt"></i> Invoice {{ invoice.invoice_number }}</h2>
+            <div>
+                <a href="{{ url_for('invoice_pdf', invoice_id=invoice.id) }}" class="btn btn-danger" target="_blank">
+                    <i class="bi bi-file-pdf"></i> Download PDF
+                </a>
+                <button onclick="window.print()" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+            </div>
+        </div>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card invoice-card" id="invoicePrint">
+            <div class="card-body">
+                <!-- Invoice Header -->
+                <div class="text-center mb-4 invoice-header">
+                    <h2 class="text-primary">CRUSHER PLANT BILL</h2>
+                    <p class="mb-1"><strong>Crusher Plant Company</strong></p>
+                    <p class="mb-1">Address Line 1, City, State</p>
+                    <p class="mb-0">Phone: +91-XXXXXXXXXX | Email: info@crusher.com</p>
+                </div>
+                
+                <hr class="invoice-divider">
+                
+                <!-- Invoice Details -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <p><strong>Invoice Number:</strong> {{ invoice.invoice_number }}</p>
+                        <p><strong>Date:</strong> {{ invoice.date.strftime('%d-%m-%Y %H:%M') }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        {% if invoice.customer_name %}
+                        <p><strong>Customer Name:</strong> {{ invoice.customer_name }}</p>
+                        {% endif %}
+                        {% if invoice.customer_address %}
+                        <p><strong>Customer Address:</strong> {{ invoice.customer_address }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Items Table -->
+                <div class="table-responsive">
+                    <table class="table table-bordered invoice-table">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>S.No</th>
+                                <th>Item Name (Tamil)</th>
+                                <th>Quantity</th>
+                                <th>Rate (₹)</th>
+                                <th>Amount (₹)</th>
+                                <th>GST</th>
+                                <th>Total (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in invoice.invoice_lines %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ line.item.name if line.item else 'Unknown' }}</td>
+                                <td>{{ "%.2f"|format(line.quantity) }}</td>
+                                <td>{{ "%.2f"|format(line.unit_price) }}</td>
+                                <td>{{ "%.2f"|format(line.quantity * line.unit_price) }}</td>
+                                <td>{{ line.gst_rate }}%</td>
+                                <td>{{ "%.2f"|format(line.line_total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="5" class="text-end"><strong>Subtotal:</strong></td>
+                                <td colspan="2"><strong>₹{{ "%.2f"|format(invoice.subtotal) }}</strong></td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="text-end">CGST (2.5%):</td>
+                                <td colspan="2">₹{{ "%.2f"|format(invoice.cgst_amount) }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="text-end">SGST (2.5%):</td>
+                                <td colspan="2">₹{{ "%.2f"|format(invoice.sgst_amount) }}</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td colspan="5" class="text-end"><strong>Grand Total:</strong></td>
+                                <td colspan="2"><strong>₹{{ "%.2f"|format(invoice.total) }}</strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <!-- Footer -->
+                <div class="mt-4 text-center invoice-footer">
+                    <p class="text-muted mb-0">Thank you for your business!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #invoicePrint, #invoicePrint * {
+        visibility: visible;
+    }
+    #invoicePrint {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .btn, .navbar, hr:not(.invoice-divider) {
+        display: none !important;
+    }
+}
+
+.invoice-card {
+    background-color: #fff;
+    border: 2px solid #E91E63;
+}
+
+.invoice-header {
+    color: #E91E63;
+}
+
+.invoice-divider {
+    border-top: 2px solid #E91E63;
+}
+
+.invoice-table {
+    margin-top: 20px;
+}
+
+.invoice-table thead {
+    background-color: #E91E63 !important;
+    color: white;
+}
+
+.invoice-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+</style>
+{% endblock %}
+

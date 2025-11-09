@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}All Invoices - Crusher Billing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-receipt"></i> All Invoices</h2>
+            <a href="{{ url_for('admin_invoices_export') }}" class="btn btn-success">
+                <i class="bi bi-download"></i> Export CSV
+            </a>
+        </div>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th>Subtotal</th>
+                                <th>CGST</th>
+                                <th>SGST</th>
+                                <th>Total</th>
+                                <th>Created By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in invoices %}
+                            <tr>
+                                <td>{{ invoice.invoice_number }}</td>
+                                <td>{{ invoice.date.strftime('%d-%m-%Y %H:%M') }}</td>
+                                <td>{{ invoice.customer_name or 'N/A' }}</td>
+                                <td>₹{{ "%.2f"|format(invoice.subtotal) }}</td>
+                                <td>₹{{ "%.2f"|format(invoice.cgst_amount) }}</td>
+                                <td>₹{{ "%.2f"|format(invoice.sgst_amount) }}</td>
+                                <td><strong>₹{{ "%.2f"|format(invoice.total) }}</strong></td>
+                                <td>
+                                    {% set user = invoice.user %}
+                                    {{ user.username if user else 'N/A' }}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

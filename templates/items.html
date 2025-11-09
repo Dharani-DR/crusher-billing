@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Items Management - Crusher Billing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="bi bi-box"></i> Items Management</h2>
+        <hr>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-plus-circle"></i> Add New Item</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_items_add') }}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Tamil Name *</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">English Name</label>
+                            <input type="text" class="form-control" name="name_english">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Price (₹) *</label>
+                            <input type="number" step="0.01" class="form-control" name="price" value="3000" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">GST Type</label>
+                            <select class="form-select" name="gst_type">
+                                <option value="standard">Standard</option>
+                                <option value="exempt">Exempt</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">GST Rate (%)</label>
+                            <input type="number" step="0.01" class="form-control" name="gst_rate" value="5.0" required>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Add Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-list"></i> All Items</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Tamil Name</th>
+                                <th>English Name</th>
+                                <th>Price (₹)</th>
+                                <th>GST Type</th>
+                                <th>GST Rate (%)</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr {% if not item.is_active %}class="table-secondary"{% endif %}>
+                                <td>{{ item.id }}</td>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.name_english or '-' }}</td>
+                                <td>
+                                    <input type="number" step="0.01" 
+                                           class="form-control form-control-sm price-input" 
+                                           data-item-id="{{ item.id }}"
+                                           value="{{ item.price }}" 
+                                           style="width: 100px; display: inline-block;">
+                                </td>
+                                <td>{{ item.gst_type }}</td>
+                                <td>{{ item.gst_rate }}%</td>
+                                <td>
+                                    {% if item.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal{{ item.id }}">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    {% if item.is_active %}
+                                    <form method="POST" action="{{ url_for('admin_items_delete', item_id=item.id) }}" style="display: inline;" onsubmit="return confirm('Deactivate this item?');">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Deactivate
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            
+                            <!-- Edit Modal -->
+                            <div class="modal fade" id="editModal{{ item.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Edit Item</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('admin_items_edit', item_id=item.id) }}">
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Tamil Name *</label>
+                                                    <input type="text" class="form-control" name="name" value="{{ item.name }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">English Name</label>
+                                                    <input type="text" class="form-control" name="name_english" value="{{ item.name_english or '' }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Price (₹) *</label>
+                                                    <input type="number" step="0.01" class="form-control" name="price" value="{{ item.price }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">GST Type</label>
+                                                    <select class="form-select" name="gst_type">
+                                                        <option value="standard" {% if item.gst_type == 'standard' %}selected{% endif %}>Standard</option>
+                                                        <option value="exempt" {% if item.gst_type == 'exempt' %}selected{% endif %}>Exempt</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">GST Rate (%)</label>
+                                                    <input type="number" step="0.01" class="form-control" name="gst_rate" value="{{ item.gst_rate }}" required>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const priceInputs = document.querySelectorAll('.price-input');
+    priceInputs.forEach(input => {
+        let timeout;
+        input.addEventListener('input', function() {
+            clearTimeout(timeout);
+            const itemId = this.dataset.itemId;
+            const newPrice = this.value;
+            
+            timeout = setTimeout(() => {
+                fetch(`/admin/items/${itemId}/update_price`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ price: newPrice })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.value = data.price;
+                        // Show success indicator
+                        this.style.borderColor = '#28a745';
+                        setTimeout(() => {
+                            this.style.borderColor = '';
+                        }, 1000);
+                    } else {
+                        alert('Error updating price: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error updating price');
+                });
+            }, 1000); // Wait 1 second after user stops typing
+        });
+    });
+});
+</script>
+{% endblock %}
+
