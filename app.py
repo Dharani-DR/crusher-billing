@@ -31,7 +31,7 @@ import threading
 
 # Import models
 from models import Base, User, Customer, Vehicle, Item, Bill, CompanySettings
-from forecast import forecast_demand, get_forecast_insights
+
 
 load_dotenv()
 
@@ -354,9 +354,6 @@ def admin_dashboard():
     
     monthly_data.reverse()
     
-    # Get forecast insights
-    forecast_insights = get_forecast_insights(db_session, Bill, Item, days=30)
-    
     return render_template('admin_dashboard.html',
                          total_users=total_users,
                          total_customers=total_customers,
@@ -368,8 +365,7 @@ def admin_dashboard():
                          monthly_sales=monthly_sales,
                          top_customers=top_customers,
                          top_items=top_items,
-                         monthly_data=monthly_data,
-                         forecast_insights=forecast_insights)
+                         monthly_data=monthly_data)
 
 # ==================== BILLING ====================
 
@@ -1027,16 +1023,7 @@ def admin_settings_company():
         flash(f'Error updating settings: {str(e)}', 'danger')
     return redirect(url_for('admin_settings'))
 
-# ==================== ADMIN - FORECAST ====================
 
-@app.route('/admin/forecast')
-@admin_required
-def admin_forecast():
-    """AI Demand Forecasting page"""
-    forecasts = forecast_demand(db_session, Bill, Item, days=30)
-    insights = get_forecast_insights(db_session, Bill, Item, days=30)
-    
-    return render_template('forecast.html', forecasts=forecasts, insights=insights)
 
 # ==================== ADMIN - BILLS ====================
 
@@ -1110,13 +1097,7 @@ def daily_sales_summary():
     except Exception as e:
         print(f"Error in daily sales summary: {e}")
 
-def update_forecast():
-    """Update forecast every Sunday midnight"""
-    try:
-        # Forecast is generated on-demand, but we can pre-cache it here
-        print("Forecast update scheduled task executed")
-    except Exception as e:
-        print(f"Error updating forecast: {e}")
+
 
 def backup_database_daily():
     """Auto backup SQLite DB daily"""
@@ -1139,13 +1120,6 @@ scheduler.add_job(
     trigger=CronTrigger(hour=20, minute=0),  # 8 PM daily
     id='daily_sales_summary',
     name='Daily Sales Summary Email',
-    replace_existing=True
-)
-scheduler.add_job(
-    func=update_forecast,
-    trigger=CronTrigger(day_of_week='sun', hour=0, minute=0),  # Sunday midnight
-    id='update_forecast',
-    name='Update Forecast',
     replace_existing=True
 )
 scheduler.add_job(
