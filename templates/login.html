@@ -3,41 +3,26 @@
 {% block title %}Login - Crusher Billing System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white text-center">
-                <h4><i class="bi bi-box-arrow-in-right"></i> Login</h4>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('login') }}">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">Username</label>
-                        <input type="text" class="form-control" id="username" name="username" required autofocus>
-                    </div>
-                    <div class="mb-3">
-                        <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-box-arrow-in-right"></i> Login
-                        </button>
-                    </div>
-                </form>
-                <hr>
-                <div class="text-center">
-                    <a href="{{ url_for('setup') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-gear"></i> Initialize Database
-                    </a>
-                </div>
-            </div>
+<div class="min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="card login-card shadow-lg p-3" style="max-width: 420px; width: 100%;">
+        <div class="text-center mb-3">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" height="60">
         </div>
-        <div class="text-center mt-3">
-            <small class="text-muted">
-                Default: admin/adminpass or user/userpass<br>
-                (After running /setup)
-            </small>
+        <h4 class="text-center fw-semibold mb-1">Login</h4>
+        <p class="text-center text-muted mb-4">Sree Dhanalakshmi Blue Metals | ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</p>
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-3">
+                <input type="text" class="form-control form-control-lg rounded-3" id="username" name="username" required autofocus placeholder="பயனர் பெயர் / Username">
+            </div>
+            <div class="mb-3">
+                <input type="password" class="form-control form-control-lg rounded-3" id="password" name="password" required placeholder="கடவுச்சொல் / Password">
+            </div>
+            <div class="d-grid mb-2">
+                <button type="submit" class="btn btn-primary btn-lg rounded-pill"><i class="bi bi-box-arrow-in-right"></i> Login</button>
+            </div>
+        </form>
+        <div class="text-center">
+            <a href="{{ url_for('setup') }}" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-gear"></i> Initialize Database</a>
         </div>
     </div>
 </div>

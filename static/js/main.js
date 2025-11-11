@@ -46,6 +46,25 @@ document.addEventListener('DOMContentLoaded', function() {
             window.print();
         });
     });
+
+    // Toast helper
+    window.showToast = function(message, type='success'){
+        const container = document.getElementById('toastContainer') || (()=>{
+            const c = document.createElement('div');
+            c.id = 'toastContainer';
+            c.className = 'position-fixed top-0 end-0 p-3';
+            document.body.appendChild(c);
+            return c;
+        })();
+        const el = document.createElement('div');
+        el.className = `toast align-items-center text-bg-${type} border-0`;
+        el.setAttribute('role','alert');
+        el.setAttribute('aria-live','assertive');
+        el.setAttribute('aria-atomic','true');
+        el.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>`;
+        container.appendChild(el);
+        new bootstrap.Toast(el,{delay:3000}).show();
+    };
 });
 
 // Helper function to calculate line total

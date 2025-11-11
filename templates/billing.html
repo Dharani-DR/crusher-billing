@@ -314,6 +314,13 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Invalid vehicle number. Expected format like TN32AX3344');
         }
     });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e){
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.getElementById('billingForm').requestSubmit(); }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); const link = document.querySelector('[data-download-pdf]'); if (link) link.click(); }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); document.getElementById('billingForm').reset(); calculateTotals(); }
+    });
 });
 </script>
 {% endblock %}
