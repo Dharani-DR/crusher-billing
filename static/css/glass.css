@@ -1,0 +1,61 @@
+/* Glassmorphic theme + print-safe overrides */
+:root {
+	--glass-bg: rgba(255, 255, 255, 0.08);
+	--glass-border: rgba(255, 255, 255, 0.18);
+	--glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass {
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-shadow);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border-radius: 12px;
+}
+
+.glass-card {
+	@apply glass p-4;
+}
+
+.blur {
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+}
+
+/* Scrollbars for tables */
+.glass-scroll {
+	overflow: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255,255,255,.3) transparent;
+}
+.glass-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+.glass-scroll::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,.3); border-radius: 8px; }
+.glass-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Sticky bottom action bar on mobile */
+.action-bar {
+	position: sticky;
+	bottom: 0;
+	z-index: 30;
+}
+
+/* Print styles */
+@media print {
+	body {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		font-family: 'Noto Sans Tamil', sans-serif;
+		background: white !important;
+		color: black !important;
+	}
+	.glass, .blur {
+		backdrop-filter: none !important;
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+	.no-print { display: none !important; }
+	.invoice-content { page-break-inside: avoid; }
+}
+
+

@@ -3,28 +3,31 @@
 {% block title %}Login - Crusher Billing System{% endblock %}
 
 {% block content %}
-<div class="min-vh-100 d-flex align-items-center justify-content-center">
-    <div class="card login-card shadow-lg p-3" style="max-width: 420px; width: 100%;">
-        <div class="text-center mb-3">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" height="60">
-        </div>
-        <h4 class="text-center fw-semibold mb-1">Login</h4>
-        <p class="text-center text-muted mb-4">Sree Dhanalakshmi Blue Metals | ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</p>
-        <form method="POST" action="{{ url_for('login') }}">
-            <div class="mb-3">
-                <input type="text" class="form-control form-control-lg rounded-3" id="username" name="username" required autofocus placeholder="பயனர் பெயர் / Username">
-            </div>
-            <div class="mb-3">
-                <input type="password" class="form-control form-control-lg rounded-3" id="password" name="password" required placeholder="கடவுச்சொல் / Password">
-            </div>
-            <div class="d-grid mb-2">
-                <button type="submit" class="btn btn-primary btn-lg rounded-pill"><i class="bi bi-box-arrow-in-right"></i> Login</button>
-            </div>
-        </form>
-        <div class="text-center">
-            <a href="{{ url_for('setup') }}" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-gear"></i> Initialize Database</a>
-        </div>
-    </div>
+<div class="min-h-[80vh] flex items-center justify-center px-4">
+	<div class="glass max-w-md w-full p-6">
+		<div class="text-center mb-5">
+			<img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="mx-auto h-20 w-20 object-contain mb-3">
+			<div class="text-lg font-semibold">Sree Dhanalakshmi Blue Metals</div>
+			<div class="text-sm text-slate-300">ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</div>
+		</div>
+		<form method="POST" action="{{ url_for('login') }}" class="space-y-4">
+			<input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+			<div>
+				<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-400" id="username" name="username" required autofocus placeholder="பயனர் பெயர் / Username">
+			</div>
+			<div>
+				<input type="password" class="w-full rounded-md bg-white/10 border border-white/10 px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-400" id="password" name="password" required placeholder="கடவுச்சொல் / Password">
+			</div>
+			<div class="pt-2">
+				<button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-white">
+					<i class="bi bi-box-arrow-in-right"></i> Login
+				</button>
+			</div>
+		</form>
+		<div class="text-center mt-4">
+			<a href="{{ url_for('setup') }}" class="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-sm hover:bg-white/10"><i class="bi bi-gear"></i> Initialize Database</a>
+		</div>
+	</div>
 </div>
 {% endblock %}
 

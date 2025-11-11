@@ -3,58 +3,65 @@
 {% block title %}Settings - Admin{% endblock %}
 
 {% block content %}
-<div class="row mb-3">
-    <div class="col-12">
-        <h2 class="fw-semibold"><i class="bi bi-sliders"></i> Admin Settings</h2>
-    </div>
-    <div class="col-12">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('admin_settings_company') }}">
-                    <h6 class="text-uppercase text-muted mb-2">Crusher Details</h6>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Company Name (Tamil)</label>
-                            <textarea class="form-control" name="company_name_tamil" rows="2" required>{{ company_settings.company_name_tamil or '' }}</textarea>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Company Name (English)</label>
-                            <input type="text" class="form-control" name="company_name_english" value="{{ company_settings.company_name_english or '' }}">
-                        </div>
-                    </div>
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label">Address (Tamil)</label>
-                            <textarea class="form-control" name="address_tamil" rows="3" required>{{ company_settings.address_tamil or '' }}</textarea>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Address (English)</label>
-                            <textarea class="form-control" name="address_english" rows="3">{{ company_settings.address_english or '' }}</textarea>
-                        </div>
-                    </div>
+<div class="space-y-4">
+	<h2 class="text-2xl font-semibold flex items-center gap-2"><i class="bi bi-sliders"></i> Admin Settings</h2>
+	<div class="glass p-4">
+		<form method="POST" action="{{ url_for('admin_settings_company') }}" class="space-y-4" enctype="multipart/form-data">
+			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Crusher Details</h6>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div>
+					<label class="block text-sm mb-1">நிறுவன பெயர் (Company Name - Tamil)</label>
+					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="company_name_tamil" rows="2" required>{{ company_settings.company_name_tamil or '' }}</textarea>
+				</div>
+				<div>
+					<label class="block text-sm mb-1">Company Name (English)</label>
+					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="company_name_english" value="{{ company_settings.company_name_english or '' }}">
+				</div>
+			</div>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div>
+					<label class="block text-sm mb-1">முகவரி (Address - Tamil)</label>
+					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="address_tamil" rows="3" required>{{ company_settings.address_tamil or '' }}</textarea>
+				</div>
+				<div>
+					<label class="block text-sm mb-1">Address (English)</label>
+					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="address_english" rows="3">{{ company_settings.address_english or '' }}</textarea>
+				</div>
+			</div>
 
-                    <h6 class="text-uppercase text-muted mb-2">Tax Settings</h6>
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-4">
-                            <label class="form-label">GSTIN</label>
-                            <input type="text" class="form-control" name="gstin" value="{{ company_settings.gstin or '' }}" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Phone Numbers (comma-separated)</label>
-                            <input type="text" class="form-control" name="phone_numbers" value="{{ company_settings.phone_numbers or '' }}" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Footer Message</label>
-                            <input type="text" class="form-control" name="footer_message" value="{{ company_settings.footer_message or '' }}">
-                        </div>
-                    </div>
+			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Branding</h6>
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+				<div class="md:col-span-2">
+					<label class="block text-sm mb-1">Logo (PNG/WebP)</label>
+					<input type="file" accept=".png,.webp,image/png,image/webp" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2">
+					<div class="text-xs text-slate-300 mt-1">Upload `static/img/logo.png` via deployment or file manager for production.</div>
+				</div>
+				<div class="flex items-center gap-3">
+					<img id="logoPreview" src="{{ url_for('static', filename='img/logo.png') }}" class="h-16 w-16 object-contain rounded-md border border-white/10" alt="Logo">
+					<div class="text-xs">Preview</div>
+				</div>
+			</div>
 
-                    <div class="text-end">
-                        <button type="submit" class="btn btn-primary btn-lg rounded-pill">Save Settings</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Tax Settings</h6>
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+				<div>
+					<label class="block text-sm mb-1">GSTIN</label>
+					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="gstin" value="{{ company_settings.gstin or '' }}" required>
+				</div>
+				<div>
+					<label class="block text-sm mb-1">Phone Numbers (comma-separated)</label>
+					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="phone_numbers" value="{{ company_settings.phone_numbers or '' }}" required>
+				</div>
+				<div>
+					<label class="block text-sm mb-1">Footer Message</label>
+					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="footer_message" value="{{ company_settings.footer_message or '' }}">
+				</div>
+			</div>
+
+			<div class="text-right">
+				<button type="submit" class="inline-flex items-center gap-2 rounded-md bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5">Save Settings</button>
+			</div>
+		</form>
+	</div>
 </div>
 {% endblock %}

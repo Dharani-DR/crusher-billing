@@ -9,6 +9,10 @@ from sqlalchemy import create_engine, func, desc
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from flask_talisman import Talisman
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import os
 import traceback
 import csv
@@ -23,6 +27,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import atexit
+import threading
 
 # Import models
 from models import Base, User, Customer, Vehicle, Item, Bill, CompanySettings
@@ -33,6 +38,11 @@ load_dotenv()
 # Create Flask app (ensure only one instance)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax'
+)
 
 # Ensure 'instance' directory exists (needed on Render for SQLite)
 instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
@@ -66,6 +76,7 @@ def show_debug():
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False)
 Session = sessionmaker(bind=engine)
 db_session = Session()
+bill_lock = threading.Lock()
 
 # Flask-Login setup
 login_manager = LoginManager()
@@ -76,6 +87,36 @@ login_manager.login_message = 'Please log in to access this page.'
 @login_manager.user_loader
 def load_user(user_id):
     return db_session.query(User).get(int(user_id))
+
+# Security: Talisman, CSRF, Rate Limiter
+csp = {
+    'default-src': [
+        "'self'"
+    ],
+    'img-src': [
+        "'self'",
+        "data:"
+    ],
+    'style-src': [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net"
+    ],
+    'script-src': [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.tailwindcss.com",
+        "https://cdn.jsdelivr.net"
+    ],
+    'font-src': [
+        "'self'",
+        "data:"
+    ],
+    'connect-src': ["'self'"]
+}
+Talisman(app, content_security_policy=csp, force_https=True)
+csrf = CSRFProtect(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=["200 per hour"])
 
 # Helper function to require admin role
 def admin_required(f):
@@ -146,6 +187,12 @@ def login():
         return redirect(url_for('dashboard'))
     
     if request.method == 'POST':
+        # Rate limit by IP for login
+        try:
+            limiter.limit("5 per minute")(lambda: None)()
+        except Exception:
+            flash('Too many attempts. Please try again later.', 'danger')
+            return redirect(url_for('login'))
         username = request.form.get('username')
         password = request.form.get('password')
         
@@ -394,22 +441,23 @@ def billing():
             gst = total * (gst_rate / 100)
             grand_total = total + gst + round_off
             
-            # Create bill
-            bill = Bill(
-                bill_no=get_next_bill_no(),
-                date=datetime.now(),
-                customer_id=customer.id,
-                vehicle_id=vehicle.id if vehicle else None,
-                item_id=item.id,
-                quantity=quantity,
-                rate=rate,
-                total=total,
-                gst=gst,
-                grand_total=grand_total,
-                user_id=current_user.id
-            )
-            db_session.add(bill)
-            db_session.commit()
+            # Create bill (thread-safe number generation)
+            with bill_lock:
+                bill = Bill(
+                    bill_no=get_next_bill_no(),
+                    date=datetime.now(),
+                    customer_id=customer.id,
+                    vehicle_id=vehicle.id if vehicle else None,
+                    item_id=item.id,
+                    quantity=quantity,
+                    rate=rate,
+                    total=total,
+                    gst=gst,
+                    grand_total=grand_total,
+                    user_id=current_user.id
+                )
+                db_session.add(bill)
+                db_session.commit()
             
             flash('Bill created successfully!', 'success')
             return redirect(url_for('invoice_detail', bill_id=bill.id))
@@ -490,21 +538,22 @@ def api_create_invoice():
         gst = total * (gst_rate / 100)
         grand_total = total + gst + round_off
 
-        bill = Bill(
-            bill_no=get_next_bill_no(),
-            date=datetime.now(),
-            customer_id=customer.id,
-            vehicle_id=vehicle.id,
-            item_id=item.id,
-            quantity=quantity,
-            rate=rate,
-            total=total,
-            gst=gst,
-            grand_total=grand_total,
-            user_id=current_user.id
-        )
-        db_session.add(bill)
-        db_session.commit()
+        with bill_lock:
+            bill = Bill(
+                bill_no=get_next_bill_no(),
+                date=datetime.now(),
+                customer_id=customer.id,
+                vehicle_id=vehicle.id,
+                item_id=item.id,
+                quantity=quantity,
+                rate=rate,
+                total=total,
+                gst=gst,
+                grand_total=grand_total,
+                user_id=current_user.id
+            )
+            db_session.add(bill)
+            db_session.commit()
         return jsonify({'id': bill.id, 'bill_no': bill.bill_no}), 201
     except Exception as e:
         db_session.rollback()
@@ -613,7 +662,7 @@ def invoice_pdf(bill_id):
 
     # Register Tamil font if present
     tamil_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts', 'NotoSansTamil-Regular.ttf')
-    tamil_font_name = 'NotoSansTamil'
+    tamil_font_name = 'NotoTamil'
     try:
         if os.path.exists(tamil_font_path):
             if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
@@ -637,7 +686,7 @@ def invoice_pdf(bill_id):
     subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName=body_font, fontSize=11, alignment=1, textColor=colors.HexColor('#333'))
     label_style = ParagraphStyle('Label', parent=styles['Normal'], fontName=body_font, fontSize=10)
 
-    # Header (Tamil pink bill style)
+    # Header block (with logo left, text right-aligned)
     story.append(Paragraph(company_settings.company_name_tamil or 'ஸ்ரீ தனலட்சுமி புளூ மெட்டல்ஸ்', title_style))
     story.append(Paragraph(company_settings.company_name_english or 'Sri Dhanalakshmi Blue Metals', subtitle_style))
     story.append(Paragraph(company_settings.address_tamil or 'எண்டியூர் & எரியூர் அஞ்சல், வாணூர் தாலுகா, விழுப்புரம் மாவட்டம்', subtitle_style))
@@ -707,7 +756,28 @@ def invoice_pdf(bill_id):
     story.append(Spacer(1, 6))
     story.append(Paragraph('அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்', ParagraphStyle('Sign', parent=styles['Normal'], fontName=body_font, fontSize=10, alignment=2)))
     
-    doc.build(story)
+    # Watermark and logo on page
+    from reportlab.platypus import Image as RLImage
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', 'logo.png')
+
+    def draw_page(canvas, doc_obj):
+        # Watermark
+        try:
+            if os.path.exists(logo_path):
+                canvas.saveState()
+                canvas.setFillAlpha(0.1)
+                canvas.drawImage(logo_path, 300, 600, width=180, height=180, mask='auto', preserveAspectRatio=True, anchor='c')
+                canvas.restoreState()
+        except Exception:
+            pass
+        # Header logo top-left
+        try:
+            if os.path.exists(logo_path):
+                canvas.drawImage(logo_path, 36, A4[1]-120, width=80, height=80, mask='auto', preserveAspectRatio=True)
+        except Exception:
+            pass
+
+    doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
     buffer.seek(0)
     
     return send_file(
@@ -1048,6 +1118,20 @@ def update_forecast():
     except Exception as e:
         print(f"Error updating forecast: {e}")
 
+def backup_database_daily():
+    """Auto backup SQLite DB daily"""
+    try:
+        src = db_path_file
+        backup_dir = os.path.join(os.path.dirname(src), 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        dst = os.path.join(backup_dir, f'data_{ts}.db')
+        with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
+            fdst.write(fsrc.read())
+        print(f"Database backup created at {dst}")
+    except Exception as e:
+        print(f"Error creating DB backup: {e}")
+
 # Initialize scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(
@@ -1062,6 +1146,13 @@ scheduler.add_job(
     trigger=CronTrigger(day_of_week='sun', hour=0, minute=0),  # Sunday midnight
     id='update_forecast',
     name='Update Forecast',
+    replace_existing=True
+)
+scheduler.add_job(
+    func=backup_database_daily,
+    trigger=CronTrigger(hour=1, minute=0),  # 1 AM daily
+    id='backup_database_daily',
+    name='Backup SQLite Database',
     replace_existing=True
 )
 scheduler.start()

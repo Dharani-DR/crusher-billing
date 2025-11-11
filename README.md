@@ -1,3 +1,91 @@
+# Crusher Billing - Glassmorphic Upgrade (Tamil + English)
+
+This update modernizes the UI, adds Tamil print/PDF support, integrates logo branding, and hardens security without changing routes, APIs, or database models.
+
+## What's New
+- TailwindCSS + custom glass theme (`static/css/glass.css`)
+- Bilingual UI labels (Tamil-English), mobile responsive layouts
+- Tamil font embedded for HTML and PDF (`NotoSansTamil-Regular.ttf`)
+- Logo integration across navbar, dashboard, invoice (HTML + PDF), footer watermark
+- Print/PDF fixes with watermark and crisp logo
+- Front-end enhancements in `static/js/ui-enhance.js`
+- Security: HTTPS headers (Flask-Talisman), CSRF, Rate limiting, secure cookies
+- Performance/ops: gunicorn ready, daily DB backup, SQLite bill number lock
+
+## Assets to Provide
+1) Place these files (recommended sizes):
+- `static/fonts/NotoSansTamil-Regular.ttf` (Google Noto Tamil)
+- `static/img/logo.png` (square transparent PNG, e.g., 512x512)
+- Optional: `static/img/logo.webp` (used by browsers that support it)
+
+2) Font source:
+- Notofonts Tamil releases: https://github.com/notofonts/tamil/releases
+
+## Development
+Create and activate a virtual environment, then install requirements:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run locally:
+
+```bash
+python app.py
+```
+
+Initialize DB (one-time):
+
+```
+/setup
+```
+
+## Deployment
+- Use gunicorn:
+
+```bash
+gunicorn app:app --bind 0.0.0.0:$PORT
+```
+
+- Ensure `.env` is not committed; we load values via `python-dotenv`. Required:
+  - `SECRET_KEY`
+
+- Upload `static/fonts/NotoSansTamil-Regular.ttf` and `static/img/logo.png`.
+
+## Security
+- HTTPS and CSP enforced via Flask-Talisman
+- CSRF protection (`flask-wtf`) – hidden field `csrf_token` added in forms
+- Rate limiting (`Flask-Limiter`) – login attempts limited (5/min)
+- Hardened cookies:
+  - `SESSION_COOKIE_SECURE=True`
+  - `SESSION_COOKIE_HTTPONLY=True`
+  - `SESSION_COOKIE_SAMESITE='Lax'`
+
+## Printing and PDF
+- HTML print optimized in `static/css/glass.css` `@media print` section
+- ReportLab registers `NotoTamil` from `static/fonts/NotoSansTamil-Regular.ttf`
+- PDF includes:
+  - Header (Tamil + English, GSTIN, Phones, Address)
+  - Top-left logo (80x80)
+  - Watermark logo at 10% opacity
+  - CGST/SGST split (2.5% each)
+
+## Extra Utilities
+- Daily DB backup (APScheduler) to `instance/backups/`
+- `scripts/init_bill_counter.py` to check/initialize billing counter
+
+## Notes
+- All original routes/APIs preserved.
+- Autocomplete endpoints in use:
+  - `/api/customers/search`
+  - `/api/vehicles?q=`
+- Vehicle number validated via regex `^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$`.
+
+## Branding
+- Navbar: small logo + bilingual name
+- Dashboard: watermark corner logo
+- Invoice: top-left logo + watermark + Tamil first header
+
 # Sri Dhanalakshmi Blue Metals – Crusher Billing System
 
 A comprehensive, mobile-responsive GST billing platform for crusher plant business management.
