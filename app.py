@@ -18,6 +18,8 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import atexit
@@ -87,25 +89,19 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Helper function to get next bill number
+# Helper function to get next bill number (sequential INV-0001)
 def get_next_bill_no():
     last_bill = db_session.query(Bill).order_by(desc(Bill.id)).first()
-    if last_bill:
-        # Extract number from bill_no (format: BILL-YYYYMMDD-XXXX)
+    if last_bill and last_bill.bill_no and last_bill.bill_no.startswith('INV-'):
         try:
-            parts = last_bill.bill_no.split('-')
-            if len(parts) == 3:
-                last_num = int(parts[2])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-        except:
-            new_num = 1
+            last_num = int(last_bill.bill_no.split('-')[1])
+        except Exception:
+            last_num = last_bill.id or 0
+    elif last_bill:
+        last_num = last_bill.id or 0
     else:
-        new_num = 1
-    
-    bill_no = f"BILL-{datetime.now().strftime('%Y%m%d')}-{new_num:04d}"
-    return bill_no
+        last_num = 0
+    return f"INV-{last_num + 1:04d}"
 
 # Helper function to get company settings
 def get_company_settings():
@@ -345,6 +341,14 @@ def billing():
             quantity = float(request.form.get('quantity', 0))
             rate = float(request.form.get('rate', 0))
             round_off = float(request.form.get('round_off', 0))
+
+            # Validate vehicle number (required)
+            import re
+            vehicle_pattern = re.compile(r'^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$')
+            vehicle_number = vehicle_number.upper()
+            if not vehicle_pattern.match(vehicle_number):
+                flash('Invalid vehicle number. Format example: TN32AX3344', 'danger')
+                return redirect(url_for('billing'))
             
             # Get or create customer
             customer = db_session.query(Customer).filter_by(name=customer_name).first()
@@ -419,6 +423,127 @@ def billing():
     
     return render_template('billing.html', customers=customers, items=items)
 
+@app.route('/api/customers')
+@login_required
+def api_customers():
+    """Unified customers suggestion endpoint ?q="""
+    query = request.args.get('q', '').strip()
+    customers = db_session.query(Customer).filter(Customer.name.ilike(f'%{query}%')).limit(10).all()
+    return jsonify([{
+        'id': c.id,
+        'name': c.name,
+        'gst_number': c.gst_number or '',
+        'phone': c.phone or '',
+        'address': c.address or ''
+    } for c in customers])
+
+@app.route('/api/vehicles')
+@login_required
+def api_vehicles():
+    """Vehicle suggestions ?q="""
+    query = request.args.get('q', '').strip().upper()
+    vehicles = db_session.query(Vehicle).filter(Vehicle.vehicle_number.ilike(f'%{query}%')).limit(10).all()
+    return jsonify([{
+        'id': v.id,
+        'vehicle_number': v.vehicle_number,
+        'vehicle_type': v.vehicle_type or ''
+    } for v in vehicles])
+
+@app.route('/api/invoices', methods=['POST'])
+@login_required
+def api_create_invoice():
+    """Create invoice via JSON"""
+    data = request.get_json(silent=True) or {}
+    try:
+        customer_name = (data.get('customer_name') or '').strip()
+        customer_gst = (data.get('customer_gst') or '').strip()
+        vehicle_number = (data.get('vehicle_number') or '').strip().upper()
+        vehicle_type = (data.get('vehicle_type') or '').strip()
+        item_id = int(data.get('item_id'))
+        quantity = float(data.get('quantity', 0))
+        rate = float(data.get('rate', 0))
+        round_off = float(data.get('round_off', 0))
+
+        import re
+        vehicle_pattern = re.compile(r'^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$')
+        if not vehicle_pattern.match(vehicle_number):
+            return jsonify({'error': 'Invalid vehicle number'}), 400
+
+        customer = db_session.query(Customer).filter_by(name=customer_name).first()
+        if not customer:
+            customer = Customer(name=customer_name, gst_number=customer_gst or None)
+            db_session.add(customer)
+            db_session.flush()
+
+        vehicle = db_session.query(Vehicle).filter_by(vehicle_number=vehicle_number).first()
+        if not vehicle:
+            vehicle = Vehicle(vehicle_number=vehicle_number, vehicle_type=vehicle_type or None)
+            db_session.add(vehicle)
+            db_session.flush()
+
+        item = db_session.query(Item).get(item_id)
+        if not item or not item.is_active:
+            return jsonify({'error': 'Invalid item'}), 400
+
+        total = quantity * rate
+        gst_rate = 5.0
+        gst = total * (gst_rate / 100)
+        grand_total = total + gst + round_off
+
+        bill = Bill(
+            bill_no=get_next_bill_no(),
+            date=datetime.now(),
+            customer_id=customer.id,
+            vehicle_id=vehicle.id,
+            item_id=item.id,
+            quantity=quantity,
+            rate=rate,
+            total=total,
+            gst=gst,
+            grand_total=grand_total,
+            user_id=current_user.id
+        )
+        db_session.add(bill)
+        db_session.commit()
+        return jsonify({'id': bill.id, 'bill_no': bill.bill_no}), 201
+    except Exception as e:
+        db_session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/invoices/<int:bill_id>/pdf')
+@login_required
+def api_invoice_pdf(bill_id):
+    """Return invoice PDF"""
+    return invoice_pdf(bill_id)
+
+@app.route('/api/settings', methods=['GET', 'PUT'])
+@login_required
+def api_settings():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Forbidden'}), 403
+    if request.method == 'GET':
+        s = get_company_settings()
+        return jsonify({
+            'company_name_tamil': s.company_name_tamil,
+            'company_name_english': s.company_name_english,
+            'gstin': s.gstin,
+            'address_tamil': s.address_tamil,
+            'address_english': s.address_english,
+            'phone_numbers': s.phone_numbers,
+            'footer_message': s.footer_message
+        })
+    data = request.get_json(silent=True) or {}
+    s = get_company_settings()
+    s.company_name_tamil = data.get('company_name_tamil', s.company_name_tamil)
+    s.company_name_english = data.get('company_name_english', s.company_name_english)
+    s.gstin = data.get('gstin', s.gstin)
+    s.address_tamil = data.get('address_tamil', s.address_tamil)
+    s.address_english = data.get('address_english', s.address_english)
+    s.phone_numbers = data.get('phone_numbers', s.phone_numbers)
+    s.footer_message = data.get('footer_message', s.footer_message)
+    s.updated_at = datetime.utcnow()
+    db_session.commit()
+    return jsonify({'status': 'ok'})
 @app.route('/api/customers/search')
 @login_required
 def api_customers_search():
@@ -485,112 +610,102 @@ def invoice_pdf(bill_id):
         return redirect(url_for('dashboard'))
     
     company_settings = get_company_settings()
-    
+
+    # Register Tamil font if present
+    tamil_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts', 'NotoSansTamil-Regular.ttf')
+    tamil_font_name = 'NotoSansTamil'
+    try:
+        if os.path.exists(tamil_font_path):
+            if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(tamil_font_name, tamil_font_path))
+    except Exception as e:
+        # Ignore font errors; fall back to default
+        pass
+
     # Create PDF
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=24)
     
     story = []
     styles = getSampleStyleSheet()
-    
-    # Company header (Tamil)
-    title_style = ParagraphStyle(
-        'CompanyTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#1a237e'),
-        spaceAfter=12,
-        alignment=1  # Center
-    )
-    
+
+    # Typography
+    header_font = tamil_font_name if tamil_font_name in pdfmetrics.getRegisteredFontNames() else 'Helvetica-Bold'
+    body_font = tamil_font_name if tamil_font_name in pdfmetrics.getRegisteredFontNames() else 'Helvetica'
+
+    title_style = ParagraphStyle('CompanyTitle', parent=styles['Heading1'], fontName=header_font, fontSize=20, textColor=colors.HexColor('#c2185b'), alignment=1, spaceAfter=6)
+    subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName=body_font, fontSize=11, alignment=1, textColor=colors.HexColor('#333'))
+    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontName=body_font, fontSize=10)
+
+    # Header (Tamil pink bill style)
     story.append(Paragraph(company_settings.company_name_tamil or 'ஸ்ரீ தனலட்சுமி புளூ மெட்டல்ஸ்', title_style))
-    story.append(Spacer(1, 6))
-    
-    # Address (Tamil)
-    address_style = ParagraphStyle(
-        'AddressStyle',
-        parent=styles['Normal'],
-        fontSize=11,
-        alignment=1
-    )
-    story.append(Paragraph(company_settings.address_tamil or 'நெமிலி & எண்வரடி அஞ்சல், எண்டியூர், வாணூர் தாலுகா, விழுப்புரம் மாவட்டம்.', address_style))
-    story.append(Spacer(1, 6))
-    
-    # GST and Phone
-    info_style = ParagraphStyle(
-        'InfoStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=1
-    )
-    story.append(Paragraph(f'GSTIN: {company_settings.gstin or "33AUXPR8335C1Z7"}', info_style))
-    story.append(Paragraph(f'மொபைல்: {company_settings.phone_numbers or "97883 88823, 97515 31619, 75026 27223"}', info_style))
-    story.append(Spacer(1, 20))
-    
-    # Invoice details
-    invoice_style = styles['Normal']
-    story.append(Paragraph(f'<b>Bill Number:</b> {bill.bill_no}', invoice_style))
-    story.append(Paragraph(f'<b>Date:</b> {bill.date.strftime("%d-%m-%Y %H:%M")}', invoice_style))
-    story.append(Spacer(1, 12))
-    
-    # Customer details
-    story.append(Paragraph('<b>Customer Details:</b>', invoice_style))
-    story.append(Paragraph(f'Name: {bill.customer.name}', invoice_style))
-    if bill.customer.gst_number:
-        story.append(Paragraph(f'GST: {bill.customer.gst_number}', invoice_style))
-    if bill.customer.phone:
-        story.append(Paragraph(f'Phone: {bill.customer.phone}', invoice_style))
-    if bill.customer.address:
-        story.append(Paragraph(f'Address: {bill.customer.address}', invoice_style))
-    if bill.vehicle:
-        story.append(Paragraph(f'Vehicle: {bill.vehicle.vehicle_number} ({bill.vehicle.vehicle_type or ""})', invoice_style))
-    story.append(Spacer(1, 12))
-    
+    story.append(Paragraph(company_settings.company_name_english or 'Sri Dhanalakshmi Blue Metals', subtitle_style))
+    story.append(Paragraph(company_settings.address_tamil or 'எண்டியூர் & எரியூர் அஞ்சல், வாணூர் தாலுகா, விழுப்புரம் மாவட்டம்', subtitle_style))
+
+    header_table = Table([
+        [Paragraph(f'GSTIN: {company_settings.gstin or "33AUXPR8335C1Z7"}', label_style),
+         '', 
+         Paragraph(f'மொபைல்: {company_settings.phone_numbers or "97883 88823, 97515 31619, 75026 27223"}', label_style)]
+    ], colWidths=[2.5*inch, 1*inch, 2.5*inch])
+    header_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'LEFT')]))
+    story.append(header_table)
+    story.append(Spacer(1, 10))
+
+    # Top block (Bill meta)
+    top_data = [
+        [Paragraph('பில் எண் / Bill No', label_style), Paragraph(bill.bill_no, label_style),
+         Paragraph('தேதி / Date', label_style), Paragraph(bill.date.strftime('%d-%m-%Y %H:%M'), label_style)],
+        [Paragraph('இடம் / Place', label_style), Paragraph('நெமிலி', label_style),
+         Paragraph('வாகன எண் / Vehicle No', label_style), Paragraph(bill.vehicle.vehicle_number if bill.vehicle else '-', label_style)]
+    ]
+    top_table = Table(top_data, colWidths=[1.4*inch, 2.0*inch, 1.4*inch, 2.2*inch])
+    top_table.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#fde0ef'))]))
+    story.append(top_table)
+    story.append(Spacer(1, 8))
+
+    # Customer block
+    cust_rows = [
+        [Paragraph('வாடிக்கையாளர் / Customer', label_style), Paragraph(bill.customer.name, label_style)],
+        [Paragraph('GST No', label_style), Paragraph(bill.customer.gst_number or '-', label_style)]
+    ]
+    cust_table = Table(cust_rows, colWidths=[1.8*inch, 5.2*inch])
+    cust_table.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black)]))
+    story.append(cust_table)
+    story.append(Spacer(1, 8))
+
     # Items table
-    data = [['S.No', 'Item Name', 'Qty', 'Rate', 'Amount', 'GST (5%)', 'Total']]
-    
-    data.append([
-        '1',
-        bill.item.name,
-        f'{bill.quantity:.2f}',
-        f'₹{bill.rate:.2f}',
-        f'₹{bill.total:.2f}',
-        f'₹{bill.gst:.2f}',
-        f'₹{bill.grand_total:.2f}'
-    ])
-    
-    # Totals
-    data.append(['', '', '', '', '', '<b>Subtotal:</b>', f'<b>₹{bill.total:.2f}</b>'])
-    data.append(['', '', '', '', '', '<b>GST (5%):</b>', f'<b>₹{bill.gst:.2f}</b>'])
-    data.append(['', '', '', '', '', '<b>Grand Total:</b>', f'<b>₹{bill.grand_total:.2f}</b>'])
-    
-    table = Table(data, colWidths=[0.5*inch, 2*inch, 0.7*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -4), colors.beige),
-        ('GRID', (0, 0), (-1, -4), 1, colors.black),
-        ('BACKGROUND', (0, -3), (-1, -1), colors.lightgrey),
-        ('FONTNAME', (0, -3), (-1, -1), 'Helvetica-Bold'),
+    items_header = [Paragraph('அ/எ', label_style), Paragraph('பொருள் விவரம்', label_style), Paragraph('அளவு', label_style), Paragraph('விலை', label_style), Paragraph('தொகை', label_style)]
+    items_rows = [items_header]
+    items_rows.append(['1', Paragraph(bill.item.name, label_style), f'{bill.quantity:.2f}', f'₹{bill.rate:.2f}', f'₹{bill.total:.2f}'])
+
+    items_table = Table(items_rows, colWidths=[0.6*inch, 3.6*inch, 0.9*inch, 1.0*inch, 1.0*inch])
+    items_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f8bbd0')),
+        ('ALIGN', (2,1), (-1,-1), 'CENTER')
     ]))
-    
-    story.append(table)
-    story.append(Spacer(1, 20))
-    
-    # Footer
-    footer_style = ParagraphStyle(
-        'FooterStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=1,
-        textColor=colors.grey
-    )
+    story.append(items_table)
+    story.append(Spacer(1, 8))
+
+    # Summary with GST split
+    cgst = bill.total * 0.025
+    sgst = bill.total * 0.025
+    summary_rows = [
+        [Paragraph('Subtotal', label_style), Paragraph(f'₹{bill.total:.2f}', label_style)],
+        [Paragraph('CGST 2.5%', label_style), Paragraph(f'₹{cgst:.2f}', label_style)],
+        [Paragraph('SGST 2.5%', label_style), Paragraph(f'₹{sgst:.2f}', label_style)],
+        [Paragraph('<b>Grand Total</b>', label_style), Paragraph(f'<b>₹{bill.grand_total:.2f}</b>', label_style)]
+    ]
+    summary_table = Table(summary_rows, colWidths=[5.1*inch, 1.9*inch])
+    summary_table.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#fde0ef'))]))
+    story.append(summary_table)
+    story.append(Spacer(1, 12))
+
+    # Footer/signature
     footer_text = company_settings.footer_message or 'நன்றி!'
-    story.append(Paragraph(footer_text, footer_style))
+    story.append(Paragraph(footer_text, ParagraphStyle('Footer', parent=styles['Normal'], fontName=body_font, fontSize=10, alignment=1, textColor=colors.grey)))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph('அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்', ParagraphStyle('Sign', parent=styles['Normal'], fontName=body_font, fontSize=10, alignment=2)))
     
     doc.build(story)
     buffer.seek(0)

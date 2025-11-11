@@ -70,9 +70,11 @@
                     <h5><i class="bi bi-truck"></i> Vehicle Information</h5>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">Vehicle Number</label>
-                        <input type="text" class="form-control" name="vehicle_number" id="vehicle_number" autocomplete="off">
+                    <div class="mb-3 position-relative">
+                        <label class="form-label">Vehicle Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="vehicle_number" id="vehicle_number" autocomplete="off" required placeholder="e.g., TN32AX3344">
+                        <div id="vehicleSuggestions" class="autocomplete-suggestions" style="display:none;"></div>
+                        <div class="form-text">Format: TN32AX3344</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Vehicle Type</label>
@@ -169,6 +171,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const rateInput = document.getElementById('rate');
     const roundOffInput = document.getElementById('round_off');
     const suggestRateBtn = document.getElementById('suggestRateBtn');
+    const vehicleInput = document.getElementById('vehicle_number');
+    const vehicleTypeInput = document.getElementById('vehicle_type');
+    const vehicleSuggestions = document.getElementById('vehicleSuggestions');
     
     let customerSearchTimeout;
     
@@ -212,6 +217,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         if (!customerNameInput.contains(e.target) && !customerSuggestions.contains(e.target)) {
             customerSuggestions.style.display = 'none';
+        }
+        if (!vehicleInput.contains(e.target) && !vehicleSuggestions.contains(e.target)) {
+            vehicleSuggestions.style.display = 'none';
         }
     });
     
@@ -266,6 +274,46 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial calculation
     calculateTotals();
+
+    // Vehicle autocomplete + uppercase + regex validate
+    function validateVehicleFormat(value) {
+        return /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/.test(value);
+    }
+
+    vehicleInput.addEventListener('input', function() {
+        this.value = this.value.toUpperCase().replace(/\s+/g, '');
+        const query = this.value.trim();
+        if (query.length < 2) {
+            vehicleSuggestions.style.display = 'none';
+            return;
+        }
+        fetch(`/api/vehicles?q=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(list => {
+                vehicleSuggestions.innerHTML = '';
+                list.forEach(v => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-suggestion';
+                    div.textContent = `${v.vehicle_number}${v.vehicle_type ? ' ('+v.vehicle_type+')' : ''}`;
+                    div.addEventListener('click', () => {
+                        vehicleInput.value = v.vehicle_number;
+                        vehicleTypeInput.value = v.vehicle_type || '';
+                        vehicleSuggestions.style.display = 'none';
+                    });
+                    vehicleSuggestions.appendChild(div);
+                });
+                vehicleSuggestions.style.display = list.length ? 'block' : 'none';
+            });
+    });
+
+    // On submit validate vehicle format
+    document.getElementById('billingForm').addEventListener('submit', function(e) {
+        const v = vehicleInput.value.toUpperCase().trim();
+        if (!validateVehicleFormat(v)) {
+            e.preventDefault();
+            alert('Invalid vehicle number. Expected format like TN32AX3344');
+        }
+    });
 });
 </script>
 {% endblock %}
