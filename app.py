@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+import traceback
 import csv
 import io
 from reportlab.lib.pagesizes import A4
@@ -27,18 +28,38 @@ from forecast import forecast_demand, get_forecast_insights
 
 load_dotenv()
 
+# Create Flask app (ensure only one instance)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Ensure instance directory exists
+# Ensure 'instance' directory exists (needed on Render for SQLite)
 instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 
-# Database setup
-db_file = os.path.join(instance_path, 'billing.db')
-db_path = os.getenv('DATABASE_URL', f'sqlite:///{db_file.replace(os.sep, "/")}')
-app.config['SQLALCHEMY_DATABASE_URI'] = db_path
+# Define SQLite DB path safely and auto-create file
+db_path_file = os.path.join(instance_path, 'data.db')
+if not os.path.exists(db_path_file):
+    open(db_path_file, 'a').close()
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path_file.replace(os.sep, "/")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Runtime error log file and global error handler
+LOG_FILE = '/tmp/runtime_error.log'
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write("\n==== ERROR OCCURRED ====\n")
+        traceback.print_exc(file=f)
+    return jsonify({"error": "Internal Server Error"}), 500
+
+@app.route("/debug-log")
+def show_debug():
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'r', encoding='utf-8') as f:
+            return "<pre>" + f.read() + "</pre>"
+    return "No errors logged yet."
 
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False)
 Session = sessionmaker(bind=engine)
