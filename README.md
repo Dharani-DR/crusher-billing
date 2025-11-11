@@ -1,60 +1,159 @@
-# Crusher Billing System
+# Sri Dhanalakshmi Blue Metals – Crusher Billing System
 
-A full-stack Flask web application for managing crusher plant billing with admin and user roles.
+A comprehensive, mobile-responsive GST billing platform for crusher plant business management.
 
 ## Features
 
-- **Admin Features**:
-  - Manage items with Tamil names
-  - Manage users and roles
-  - View all invoices
-  - Export invoices to CSV
-  - Sales reports (daily/monthly)
-  - GST configuration
-  - Database backup
-  - Audit logs
+- ✅ **Customer & Vehicle Management** - Manage customers with GST numbers and vehicle information
+- ✅ **Billing System** - Create bills with auto-calculated GST and round-off adjustments
+- ✅ **Tamil-English Bilingual Invoices** - Professional invoices with company details in both languages
+- ✅ **PDF Generation** - Download invoices as PDF
+- ✅ **Admin Dashboard** - Comprehensive dashboard with charts and statistics
+- ✅ **AI Demand Forecasting** - Facebook Prophet-based demand forecasting for next 30 days
+- ✅ **Automated Tasks** - Daily sales summary emails and weekly forecast updates
+- ✅ **Mobile Responsive** - Works seamlessly on mobile, tablet, and desktop
 
-- **User Features**:
-  - Create invoices
-  - Auto-calculate GST (CGST 2.5%, SGST 2.5%)
-  - Print/save invoices (PDF/HTML)
-  - View recent invoices
+## Tech Stack
 
-## Setup
+- **Backend**: Flask 3.0.0
+- **Database**: SQLAlchemy ORM (SQLite locally, PostgreSQL on Render)
+- **Authentication**: Flask-Login
+- **PDF Generation**: ReportLab
+- **AI Forecasting**: Facebook Prophet
+- **Scheduling**: APScheduler
+- **Frontend**: Bootstrap 5, Chart.js
+- **Deployment**: Gunicorn (Render)
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+## Installation
 
-2. Initialize the database:
-```bash
-python app.py
-```
-Then visit `/setup` to initialize the database with default users.
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd crusher-billing
+   ```
 
-3. Default credentials:
-   - Admin: `admin` / `adminpass`
-   - User: `user` / `userpass`
+2. **Create virtual environment** (Python 3.12 recommended)
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-## Running
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```bash
-python app.py
-```
+4. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
 
-The application will run on `http://localhost:5000`
+5. **Initialize database**
+   - Visit `http://localhost:5000/setup` in your browser
+   - This creates the database and default users:
+     - Admin: `admin` / `admin123`
+     - User: `user` / `user123`
+
+6. **Run the application**
+   ```bash
+   python app.py
+   ```
+
+   Or with Gunicorn (production):
+   ```bash
+   gunicorn app:app
+   ```
+
+## Default Credentials
+
+- **Admin**: username: `admin`, password: `admin123`
+- **User**: username: `user`, password: `user123`
+
+**⚠️ Change these passwords immediately in production!**
 
 ## Project Structure
 
 ```
 crusher-billing/
 ├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependencies
-├── .env                   # Environment variables
-├── instance/
-│   └── billing.db        # SQLite database
-├── templates/            # HTML templates
-└── static/               # CSS, JS, images
+├── models.py             # SQLAlchemy database models
+├── forecast.py          # AI demand forecasting logic
+├── requirements.txt     # Python dependencies
+├── Procfile             # Render deployment configuration
+├── .env.example        # Environment variables template
+├── templates/          # Jinja2 HTML templates
+│   ├── base.html
+│   ├── billing.html
+│   ├── invoice_detail.html
+│   ├── admin_dashboard.html
+│   ├── forecast.html
+│   └── ...
+└── static/             # CSS, JS, and assets
+    ├── css/
+    └── js/
 ```
 
+## Key Features Explained
+
+### Billing System
+- Customer autocomplete from existing customers
+- Auto-fill GST number when customer is selected
+- Rate suggestion based on last 3 bills of the same item
+- Real-time total calculation with GST (5%)
+- Round-off adjustment support
+
+### Invoice Generation
+- Tamil-English bilingual layout
+- Company header with Tamil text
+- Auto-generated bill numbers (BILL-YYYYMMDD-XXXX)
+- Print, PDF download, and WhatsApp sharing options
+
+### Admin Dashboard
+- Daily, monthly, and total sales statistics
+- Monthly sales chart (Chart.js)
+- Top customers and top-selling items
+- AI demand forecast insights
+
+### AI Demand Forecasting
+- Uses Facebook Prophet for time-series forecasting
+- Predicts next 30 days of demand by item
+- Provides insights in Tamil and English
+- Auto-updates every Sunday midnight
+
+### Automation
+- Daily sales summary email at 8 PM (configurable)
+- Weekly forecast update on Sunday midnight
+- Auto rate suggestion based on historical data
+
+## Deployment on Render
+
+1. **Create a new Web Service** on Render
+2. **Connect your repository**
+3. **Set environment variables**:
+   - `SECRET_KEY`: Generate a secure secret key
+   - `DATABASE_URL`: PostgreSQL connection string (provided by Render)
+4. **Build Command**: `pip install -r requirements.txt`
+5. **Start Command**: `gunicorn app:app`
+
+## Database Models
+
+- **User**: Authentication and user management
+- **Customer**: Customer information with GST numbers
+- **Vehicle**: Vehicle number and type
+- **Item**: Items with rates
+- **Bill**: Billing records with relationships to Customer, Vehicle, and Item
+- **CompanySettings**: Company information for invoices
+
+## API Endpoints
+
+- `GET /api/customers/search?q=<query>` - Customer autocomplete
+- `GET /api/items/<id>/suggest-rate` - Rate suggestion for item
+
+## License
+
+This project is proprietary software for Sri Dhanalakshmi Blue Metals.
+
+## Support
+
+For issues or questions, please contact the development team.

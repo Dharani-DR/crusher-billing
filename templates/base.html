@@ -21,46 +21,43 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% if current_user.role == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('dashboard') }}{% endif %}">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('billing') }}">
+                                <i class="bi bi-receipt"></i> Billing
+                            </a>
+                        </li>
                         {% if current_user.role == 'admin' %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
-                                    <i class="bi bi-speedometer2"></i> Dashboard
+                                <a class="nav-link" href="{{ url_for('admin_customers') }}">
+                                    <i class="bi bi-people"></i> Customers
                                 </a>
                             </li>
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-gear"></i> Admin
-                                </a>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_items') }}">
-                                        <i class="bi bi-box"></i> Items
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">
-                                        <i class="bi bi-people"></i> Users
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_invoices') }}">
-                                        <i class="bi bi-receipt"></i> All Invoices
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_reports') }}">
-                                        <i class="bi bi-graph-up"></i> Reports
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_settings') }}">
-                                        <i class="bi bi-sliders"></i> Settings
-                                    </a></li>
-                                </ul>
-                            </li>
-                        {% else %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('dashboard') }}">
-                                    <i class="bi bi-speedometer2"></i> Dashboard
+                                <a class="nav-link" href="{{ url_for('admin_vehicles') }}">
+                                    <i class="bi bi-truck"></i> Vehicles
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin_items') }}">
+                                    <i class="bi bi-box"></i> Items
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin_forecast') }}">
+                                    <i class="bi bi-graph-up-arrow"></i> Forecast
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin_settings') }}">
+                                    <i class="bi bi-sliders"></i> Settings
                                 </a>
                             </li>
                         {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('create_invoice') }}">
-                                <i class="bi bi-plus-circle"></i> Create Invoice
-                            </a>
-                        </li>
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">

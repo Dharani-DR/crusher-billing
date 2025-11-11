@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard - Crusher Billing System{% endblock %}
+{% block title %}Admin Dashboard - Sri Dhanalakshmi Blue Metals{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
@@ -10,114 +13,185 @@
     </div>
 </div>
 
+<!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card text-white bg-primary">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-people"></i> Users</h5>
-                <h2>{{ total_users }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-box"></i> Items</h5>
-                <h2>{{ total_items }}</h2>
+                <h5 class="card-title"><i class="bi bi-currency-rupee"></i> Daily Sales</h5>
+                <h2>₹{{ "%.2f"|format(today_sales) }}</h2>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card text-white bg-success">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-receipt"></i> Invoices</h5>
-                <h2>{{ total_invoices }}</h2>
+                <h5 class="card-title"><i class="bi bi-calendar-month"></i> Monthly Sales</h5>
+                <h2>₹{{ "%.2f"|format(monthly_sales) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-receipt"></i> Total Bills</h5>
+                <h2>{{ total_bills }}</h2>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card text-white bg-warning">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-currency-rupee"></i> Total Sales</h5>
+                <h5 class="card-title"><i class="bi bi-currency-rupee"></i> Total Revenue</h5>
                 <h2>₹{{ "%.2f"|format(total_sales) }}</h2>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-clock-history"></i> Recent Invoices</h5>
+                <h5><i class="bi bi-graph-up"></i> Monthly Sales Summary</h5>
             </div>
             <div class="card-body">
-                {% if recent_invoices %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Invoice #</th>
-                                    <th>Date</th>
-                                    <th>Total</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for invoice in recent_invoices %}
-                                <tr>
-                                    <td>{{ invoice.invoice_number }}</td>
-                                    <td>{{ invoice.date.strftime('%d-%m-%Y') }}</td>
-                                    <td>₹{{ "%.2f"|format(invoice.total) }}</td>
-                                    <td>
-                                        <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted">No invoices yet.</p>
-                {% endif %}
+                <canvas id="monthlyChart" height="200"></canvas>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-journal-text"></i> Recent Audit Logs</h5>
+                <h5><i class="bi bi-people"></i> Top Customers</h5>
             </div>
             <div class="card-body">
-                {% if recent_logs %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Action</th>
-                                    <th>Table</th>
-                                    <th>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for log in recent_logs %}
-                                <tr>
-                                    <td><span class="badge bg-{{ 'success' if log.action == 'create' else 'warning' if log.action == 'update' else 'danger' }}">{{ log.action }}</span></td>
-                                    <td>{{ log.table_name }}</td>
-                                    <td>{{ log.timestamp.strftime('%d-%m-%Y %H:%M') }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                {% if top_customers %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th class="text-end">Total Sales</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in top_customers %}
+                            <tr>
+                                <td>{{ customer.name }}</td>
+                                <td class="text-end">₹{{ "%.2f"|format(customer.total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% else %}
-                    <p class="text-muted">No audit logs yet.</p>
+                <p class="text-muted">No data available.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-box"></i> Top-Selling Items</h5>
+            </div>
+            <div class="card-body">
+                {% if top_items %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-end">Quantity</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in top_items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td class="text-end">{{ "%.2f"|format(item.total_qty) }}</td>
+                                <td class="text-end">₹{{ "%.2f"|format(item.total_amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No data available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-robot"></i> AI Demand Forecast Insights</h5>
+            </div>
+            <div class="card-body">
+                {% if forecast_insights %}
+                <div class="list-group">
+                    {% for insight in forecast_insights[:5] %}
+                    <div class="list-group-item">
+                        <h6 class="mb-1">{{ insight.item_name }}</h6>
+                        <p class="mb-1"><small class="text-muted">{{ insight.tamil }}</small></p>
+                        <p class="mb-0"><small>{{ insight.english }}</small></p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No forecast insights available. Create some bills to generate forecasts.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Monthly Sales Chart
+const monthlyCtx = document.getElementById('monthlyChart');
+if (monthlyCtx) {
+    const monthlyData = {{ monthly_data|tojson }};
+    new Chart(monthlyCtx, {
+        type: 'bar',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: 'Sales (₹)',
+                data: monthlyData.map(d => d.sales),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '₹' + value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+</script>
 {% endblock %}
 

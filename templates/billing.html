@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Billing - Sri Dhanalakshmi Blue Metals{% endblock %}
+
+{% block extra_css %}
+<style>
+    .autocomplete-suggestions {
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        width: 100%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .autocomplete-suggestion {
+        padding: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+    .autocomplete-suggestion:hover {
+        background-color: #f0f0f0;
+    }
+    .autocomplete-suggestion:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="bi bi-receipt"></i> Create New Bill</h2>
+        <hr>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('billing') }}" id="billingForm">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="bi bi-person"></i> Customer Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="customer_name" id="customer_name" required autocomplete="off">
+                        <div id="customerSuggestions" class="autocomplete-suggestions" style="display: none;"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">GST Number</label>
+                        <input type="text" class="form-control" name="customer_gst" id="customer_gst" autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-control" name="customer_phone" id="customer_phone" autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" name="customer_address" id="customer_address" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="bi bi-truck"></i> Vehicle Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Vehicle Number</label>
+                        <input type="text" class="form-control" name="vehicle_number" id="vehicle_number" autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Vehicle Type</label>
+                        <input type="text" class="form-control" name="vehicle_type" id="vehicle_type" placeholder="e.g., Truck, Lorry" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header bg-success text-white">
+                    <h5><i class="bi bi-box"></i> Item Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Item <span class="text-danger">*</span></label>
+                        <select class="form-select" name="item_id" id="item_id" required>
+                            <option value="">Select Item...</option>
+                            {% for item in items %}
+                            <option value="{{ item.id }}" data-rate="{{ item.rate }}">{{ item.name }} - ₹{{ item.rate }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" class="form-control" name="quantity" id="quantity" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rate (₹) <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" min="0" class="form-control" name="rate" id="rate" required>
+                            <button type="button" class="btn btn-outline-secondary" id="suggestRateBtn" title="Suggest rate from last 3 bills">
+                                <i class="bi bi-lightbulb"></i> Suggest
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <h5><i class="bi bi-calculator"></i> Bill Summary</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Subtotal:</strong></td>
+                            <td class="text-end"><strong id="subtotal">₹0.00</strong></td>
+                        </tr>
+                        <tr>
+                            <td>GST (5%):</td>
+                            <td class="text-end" id="gst">₹0.00</td>
+                        </tr>
+                        <tr>
+                            <td>Round-off:</td>
+                            <td class="text-end">
+                                <input type="number" step="0.01" class="form-control form-control-sm text-end" name="round_off" id="round_off" value="0" style="width: 120px; display: inline-block;">
+                            </td>
+                        </tr>
+                        <tr class="table-primary">
+                            <td><strong>Grand Total:</strong></td>
+                            <td class="text-end"><strong id="grandTotal">₹0.00</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check-circle"></i> Save Bill
+            </button>
+            <a href="{% if current_user.role == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('dashboard') }}{% endif %}" class="btn btn-secondary btn-lg">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const customerNameInput = document.getElementById('customer_name');
+    const customerGstInput = document.getElementById('customer_gst');
+    const customerPhoneInput = document.getElementById('customer_phone');
+    const customerAddressInput = document.getElementById('customer_address');
+    const customerSuggestions = document.getElementById('customerSuggestions');
+    const itemSelect = document.getElementById('item_id');
+    const quantityInput = document.getElementById('quantity');
+    const rateInput = document.getElementById('rate');
+    const roundOffInput = document.getElementById('round_off');
+    const suggestRateBtn = document.getElementById('suggestRateBtn');
+    
+    let customerSearchTimeout;
+    
+    // Customer autocomplete
+    customerNameInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        if (query.length < 2) {
+            customerSuggestions.style.display = 'none';
+            return;
+        }
+        
+        clearTimeout(customerSearchTimeout);
+        customerSearchTimeout = setTimeout(() => {
+            fetch(`{{ url_for('api_customers_search') }}?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        customerSuggestions.innerHTML = '';
+                        data.forEach(customer => {
+                            const div = document.createElement('div');
+                            div.className = 'autocomplete-suggestion';
+                            div.textContent = customer.name;
+                            div.addEventListener('click', function() {
+                                customerNameInput.value = customer.name;
+                                customerGstInput.value = customer.gst_number || '';
+                                customerPhoneInput.value = customer.phone || '';
+                                customerAddressInput.value = customer.address || '';
+                                customerSuggestions.style.display = 'none';
+                            });
+                            customerSuggestions.appendChild(div);
+                        });
+                        customerSuggestions.style.display = 'block';
+                    } else {
+                        customerSuggestions.style.display = 'none';
+                    }
+                });
+        }, 300);
+    });
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!customerNameInput.contains(e.target) && !customerSuggestions.contains(e.target)) {
+            customerSuggestions.style.display = 'none';
+        }
+    });
+    
+    // Auto-fill rate when item is selected
+    itemSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+            const rate = parseFloat(selectedOption.dataset.rate);
+            rateInput.value = rate.toFixed(2);
+            calculateTotals();
+        }
+    });
+    
+    // Suggest rate button
+    suggestRateBtn.addEventListener('click', function() {
+        const itemId = itemSelect.value;
+        if (!itemId) {
+            alert('Please select an item first');
+            return;
+        }
+        
+        fetch(`{{ url_for('api_suggest_rate', item_id=0) }}`.replace('0', itemId))
+            .then(response => response.json())
+            .then(data => {
+                if (data.suggested_rate) {
+                    rateInput.value = data.suggested_rate.toFixed(2);
+                    calculateTotals();
+                } else {
+                    alert('No previous bills found for this item');
+                }
+            });
+    });
+    
+    // Calculate totals
+    function calculateTotals() {
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const rate = parseFloat(rateInput.value) || 0;
+        const roundOff = parseFloat(roundOffInput.value) || 0;
+        
+        const subtotal = quantity * rate;
+        const gst = subtotal * 0.05; // 5% GST
+        const grandTotal = subtotal + gst + roundOff;
+        
+        document.getElementById('subtotal').textContent = '₹' + subtotal.toFixed(2);
+        document.getElementById('gst').textContent = '₹' + gst.toFixed(2);
+        document.getElementById('grandTotal').textContent = '₹' + grandTotal.toFixed(2);
+    }
+    
+    quantityInput.addEventListener('input', calculateTotals);
+    rateInput.addEventListener('input', calculateTotals);
+    roundOffInput.addEventListener('input', calculateTotals);
+    
+    // Initial calculation
+    calculateTotals();
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Customers - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="bi bi-people"></i> Manage Customers</h2>
+        <hr>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Add New Customer</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_customers_add') }}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" name="name" placeholder="Customer Name" required>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" name="gst_number" placeholder="GST Number">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" name="phone" placeholder="Phone">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary w-100">Add Customer</button>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <textarea class="form-control" name="address" placeholder="Address" rows="2"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>All Customers</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>GST Number</th>
+                                <th>Phone</th>
+                                <th>Address</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in customers %}
+                            <tr>
+                                <form method="POST" action="{{ url_for('admin_customers_edit', customer_id=customer.id) }}">
+                                    <td><input type="text" class="form-control form-control-sm" name="name" value="{{ customer.name }}" required></td>
+                                    <td><input type="text" class="form-control form-control-sm" name="gst_number" value="{{ customer.gst_number or '' }}"></td>
+                                    <td><input type="text" class="form-control form-control-sm" name="phone" value="{{ customer.phone or '' }}"></td>
+                                    <td><input type="text" class="form-control form-control-sm" name="address" value="{{ customer.address or '' }}"></td>
+                                    <td>
+                                        <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i></button>
+                                        <form method="POST" action="{{ url_for('admin_customers_delete', customer_id=customer.id) }}" style="display: inline;" onsubmit="return confirm('Delete this customer?');">
+                                            <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </form>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

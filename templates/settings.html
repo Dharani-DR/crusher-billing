@@ -1,42 +1,86 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - Crusher Billing System{% endblock %}
+{% block title %}Settings - Admin{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-12">
-        <h2><i class="bi bi-sliders"></i> Settings</h2>
+        <h2><i class="bi bi-sliders"></i> Admin Settings</h2>
         <hr>
     </div>
 </div>
 
-<div class="row">
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-building"></i> Company Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_settings_company') }}">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Company Name (Tamil)</label>
+                            <textarea class="form-control" name="company_name_tamil" rows="2" required>{{ company_settings.company_name_tamil or '' }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Company Name (English)</label>
+                            <input type="text" class="form-control" name="company_name_english" value="{{ company_settings.company_name_english or '' }}">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Address (Tamil)</label>
+                            <textarea class="form-control" name="address_tamil" rows="3" required>{{ company_settings.address_tamil or '' }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address (English)</label>
+                            <textarea class="form-control" name="address_english" rows="3">{{ company_settings.address_english or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">GSTIN</label>
+                            <input type="text" class="form-control" name="gstin" value="{{ company_settings.gstin or '' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone Numbers (comma-separated)</label>
+                            <input type="text" class="form-control" name="phone_numbers" value="{{ company_settings.phone_numbers or '' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Footer Message</label>
+                            <input type="text" class="form-control" name="footer_message" value="{{ company_settings.footer_message or '' }}">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Company Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-database"></i> Database Backup</h5>
+                <h5><i class="bi bi-box"></i> Items Management</h5>
             </div>
             <div class="card-body">
-                <p>Create a backup of the database. The backup will be saved in the instance directory.</p>
-                <a href="{{ url_for('admin_settings_backup') }}" class="btn btn-primary" onclick="return confirm('Create database backup?');">
-                    <i class="bi bi-download"></i> Create Backup
-                </a>
+                <p>Manage items and rates</p>
+                <a href="{{ url_for('admin_items') }}" class="btn btn-primary">Manage Items</a>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-info-circle"></i> System Information</h5>
+                <h5><i class="bi bi-people"></i> Users Management</h5>
             </div>
             <div class="card-body">
-                <p><strong>Database:</strong> SQLite</p>
-                <p><strong>Default GST:</strong> 5% (2.5% CGST + 2.5% SGST)</p>
-                <p><strong>GST Configuration:</strong> Per-item basis</p>
-                <p class="text-muted"><small>GST rates can be configured per item in the Items Management page.</small></p>
+                <p>Manage system users</p>
+                <a href="{{ url_for('admin_users') }}" class="btn btn-primary">Manage Users</a>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-

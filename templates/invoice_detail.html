@@ -1,160 +1,171 @@
 {% extends "base.html" %}
 
-{% block title %}Invoice {{ invoice.invoice_number }} - Crusher Billing System{% endblock %}
-
-{% block content %}
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2><i class="bi bi-receipt"></i> Invoice {{ invoice.invoice_number }}</h2>
-            <div>
-                <a href="{{ url_for('invoice_pdf', invoice_id=invoice.id) }}" class="btn btn-danger" target="_blank">
-                    <i class="bi bi-file-pdf"></i> Download PDF
-                </a>
-                <button onclick="window.print()" class="btn btn-primary">
-                    <i class="bi bi-printer"></i> Print
-                </button>
-            </div>
-        </div>
-        <hr>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-12">
-        <div class="card invoice-card" id="invoicePrint">
-            <div class="card-body">
-                <!-- Invoice Header -->
-                <div class="text-center mb-4 invoice-header">
-                    <h2 class="text-primary">ஸ்ரீ தனலட்சுமி புளூ மெட்டல்ஸ்</h2>
-                    <p class="mb-1"><strong>GSTIN: 33AUXPR8335C1Z7</strong></p>
-                    <p class="mb-1">நெமிலி & எண்டியூர், வாணூர் தாலுகா, விழுப்புரம் மாவட்டம்.</p>
-                    <p class="mb-0">Cell: 9788388823, 9751531619, 7502627223</p>
-                </div>
-                
-                <hr class="invoice-divider">
-                
-                <!-- Invoice Details -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <p><strong>Invoice Number:</strong> {{ invoice.invoice_number }}</p>
-                        <p><strong>Date:</strong> {{ invoice.date.strftime('%d-%m-%Y %H:%M') }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        {% if invoice.customer_name %}
-                        <p><strong>Customer Name:</strong> {{ invoice.customer_name }}</p>
-                        {% endif %}
-                        {% if invoice.customer_address %}
-                        <p><strong>Customer Address:</strong> {{ invoice.customer_address }}</p>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <!-- Items Table -->
-                <div class="table-responsive">
-                    <table class="table table-bordered invoice-table">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>S.No</th>
-                                <th>Item Name (Tamil)</th>
-                                <th>Quantity</th>
-                                <th>Rate (₹)</th>
-                                <th>Amount (₹)</th>
-                                <th>GST</th>
-                                <th>Total (₹)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for line in invoice.invoice_lines %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td>{{ line.item.name if line.item else 'Unknown' }}</td>
-                                <td>{{ "%.2f"|format(line.quantity) }}</td>
-                                <td>{{ "%.2f"|format(line.unit_price) }}</td>
-                                <td>{{ "%.2f"|format(line.quantity * line.unit_price) }}</td>
-                                <td>{{ line.gst_rate }}%</td>
-                                <td>{{ "%.2f"|format(line.line_total) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot class="table-light">
-                            <tr>
-                                <td colspan="5" class="text-end"><strong>Subtotal:</strong></td>
-                                <td colspan="2"><strong>₹{{ "%.2f"|format(invoice.subtotal) }}</strong></td>
-                            </tr>
-                            <tr>
-                                <td colspan="5" class="text-end">CGST (2.5%):</td>
-                                <td colspan="2">₹{{ "%.2f"|format(invoice.cgst_amount) }}</td>
-                            </tr>
-                            <tr>
-                                <td colspan="5" class="text-end">SGST (2.5%):</td>
-                                <td colspan="2">₹{{ "%.2f"|format(invoice.sgst_amount) }}</td>
-                            </tr>
-                            <tr class="table-primary">
-                                <td colspan="5" class="text-end"><strong>Grand Total:</strong></td>
-                                <td colspan="2"><strong>₹{{ "%.2f"|format(invoice.total) }}</strong></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-                
-                <!-- Footer -->
-                <div class="mt-4 text-center invoice-footer">
-                    <p class="text-muted mb-0">Thank you for your business!</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+{% block title %}Invoice {{ bill.bill_no }} - Sri Dhanalakshmi Blue Metals{% endblock %}
 
 {% block extra_css %}
 <style>
-@media print {
-    body * {
-        visibility: hidden;
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            background: white;
+        }
+        .invoice-container {
+            box-shadow: none;
+            border: none;
+        }
     }
-    #invoicePrint, #invoicePrint * {
-        visibility: visible;
+    .invoice-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    #invoicePrint {
-        position: absolute;
-        left: 0;
-        top: 0;
+    .company-header {
+        text-align: center;
+        border-bottom: 2px solid #1a237e;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+    }
+    .company-name {
+        font-size: 24px;
+        font-weight: bold;
+        color: #1a237e;
+        margin-bottom: 10px;
+    }
+    .invoice-table {
         width: 100%;
+        margin-top: 20px;
     }
-    .btn, .navbar, hr:not(.invoice-divider) {
-        display: none !important;
+    .invoice-table th {
+        background-color: #1a237e;
+        color: white;
+        padding: 12px;
+        text-align: center;
     }
-}
-
-.invoice-card {
-    background-color: #fff;
-    border: 2px solid #E91E63;
-}
-
-.invoice-header {
-    color: #E91E63;
-}
-
-.invoice-divider {
-    border-top: 2px solid #E91E63;
-}
-
-.invoice-table {
-    margin-top: 20px;
-}
-
-.invoice-table thead {
-    background-color: #E91E63 !important;
-    color: white;
-}
-
-.invoice-footer {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-}
+    .invoice-table td {
+        padding: 10px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+    }
+    .totals-section {
+        margin-top: 20px;
+        text-align: right;
+    }
 </style>
 {% endblock %}
 
+{% block content %}
+<div class="invoice-container">
+    <div class="no-print mb-3">
+        <a href="{% if current_user.role == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('dashboard') }}{% endif %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="bi bi-printer"></i> Print Invoice
+        </button>
+        <a href="{{ url_for('invoice_pdf', bill_id=bill.id) }}" class="btn btn-success">
+            <i class="bi bi-download"></i> Download PDF
+        </a>
+        <button onclick="shareWhatsApp()" class="btn btn-success" style="background-color: #25D366;">
+            <i class="bi bi-whatsapp"></i> Share via WhatsApp
+        </button>
+    </div>
+
+    <!-- Company Header (Tamil) -->
+    <div class="company-header">
+        <div class="company-name">{{ company_settings.company_name_tamil }}</div>
+        <div style="margin-top: 10px; font-size: 14px; line-height: 1.6;">
+            {{ company_settings.address_tamil|replace('\n', '<br>')|safe }}
+        </div>
+        <div style="margin-top: 10px; font-size: 12px;">
+            <strong>GSTIN:</strong> {{ company_settings.gstin }}<br>
+            <strong>மொபைல்:</strong> {{ company_settings.phone_numbers }}
+        </div>
+    </div>
+
+    <!-- Invoice Details -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h5>Bill Details</h5>
+            <p><strong>Bill Number:</strong> {{ bill.bill_no }}</p>
+            <p><strong>Date:</strong> {{ bill.date.strftime('%d-%m-%Y %H:%M') }}</p>
+        </div>
+        <div class="col-md-6">
+            <h5>Customer Details</h5>
+            <p><strong>Name:</strong> {{ bill.customer.name }}</p>
+            {% if bill.customer.gst_number %}
+            <p><strong>GST:</strong> {{ bill.customer.gst_number }}</p>
+            {% endif %}
+            {% if bill.customer.phone %}
+            <p><strong>Phone:</strong> {{ bill.customer.phone }}</p>
+            {% endif %}
+            {% if bill.customer.address %}
+            <p><strong>Address:</strong> {{ bill.customer.address }}</p>
+            {% endif %}
+            {% if bill.vehicle %}
+            <p><strong>Vehicle:</strong> {{ bill.vehicle.vehicle_number }} {% if bill.vehicle.vehicle_type %}({{ bill.vehicle.vehicle_type }}){% endif %}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="invoice-table table table-bordered">
+        <thead>
+            <tr>
+                <th>S.No</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Rate (₹)</th>
+                <th>Amount (₹)</th>
+                <th>GST (5%)</th>
+                <th>Total (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>{{ bill.item.name }}</td>
+                <td>{{ "%.2f"|format(bill.quantity) }}</td>
+                <td>{{ "%.2f"|format(bill.rate) }}</td>
+                <td>{{ "%.2f"|format(bill.total) }}</td>
+                <td>{{ "%.2f"|format(bill.gst) }}</td>
+                <td><strong>{{ "%.2f"|format(bill.grand_total) }}</strong></td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #f5f5f5;">
+                <td colspan="5" style="text-align: right;"><strong>Subtotal:</strong></td>
+                <td colspan="2" style="text-align: center;"><strong>₹{{ "%.2f"|format(bill.total) }}</strong></td>
+            </tr>
+            <tr style="background-color: #f5f5f5;">
+                <td colspan="5" style="text-align: right;"><strong>GST (5%):</strong></td>
+                <td colspan="2" style="text-align: center;"><strong>₹{{ "%.2f"|format(bill.gst) }}</strong></td>
+            </tr>
+            <tr style="background-color: #1a237e; color: white;">
+                <td colspan="5" style="text-align: right;"><strong>Grand Total:</strong></td>
+                <td colspan="2" style="text-align: center;"><strong>₹{{ "%.2f"|format(bill.grand_total) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Footer -->
+    <div style="margin-top: 30px; text-align: center; font-size: 14px; color: #666;">
+        {{ company_settings.footer_message or 'நன்றி!' }}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function shareWhatsApp() {
+    const billNo = '{{ bill.bill_no }}';
+    const total = '{{ bill.grand_total }}';
+    const text = `Bill Number: ${billNo}\nTotal: ₹${total}\n\nView invoice: ${window.location.href}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+}
+</script>
+{% endblock %}

@@ -14,8 +14,8 @@
     <div class="col-md-4">
         <div class="card text-white bg-primary">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-receipt"></i> Total Invoices</h5>
-                <h2>{{ total_invoices }}</h2>
+                <h5 class="card-title"><i class="bi bi-receipt"></i> Total Bills</h5>
+                <h2>{{ total_bills }}</h2>
             </div>
         </div>
     </div>
@@ -41,30 +41,32 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-clock-history"></i> Recent Invoices</h5>
+                <h5><i class="bi bi-clock-history"></i> Recent Bills</h5>
             </div>
             <div class="card-body">
-                {% if recent_invoices %}
+                {% if recent_bills %}
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Invoice #</th>
+                                    <th>Bill No</th>
                                     <th>Date</th>
                                     <th>Customer</th>
+                                    <th>Item</th>
                                     <th>Total</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for invoice in recent_invoices %}
+                                {% for bill in recent_bills %}
                                 <tr>
-                                    <td>{{ invoice.invoice_number }}</td>
-                                    <td>{{ invoice.date.strftime('%d-%m-%Y %H:%M') }}</td>
-                                    <td>{{ invoice.customer_name or 'N/A' }}</td>
-                                    <td>₹{{ "%.2f"|format(invoice.total) }}</td>
+                                    <td>{{ bill.bill_no }}</td>
+                                    <td>{{ bill.date.strftime('%d-%m-%Y %H:%M') }}</td>
+                                    <td>{{ bill.customer.name }}</td>
+                                    <td>{{ bill.item.name }}</td>
+                                    <td>₹{{ "%.2f"|format(bill.grand_total) }}</td>
                                     <td>
-                                        <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="btn btn-sm btn-primary">
+                                        <a href="{{ url_for('invoice_detail', bill_id=bill.id) }}" class="btn btn-sm btn-primary">
                                             <i class="bi bi-eye"></i> View
                                         </a>
                                     </td>
@@ -74,7 +76,7 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted">No invoices yet. <a href="{{ url_for('create_invoice') }}">Create your first invoice</a></p>
+                    <p class="text-muted">No bills yet. <a href="{{ url_for('billing') }}">Create your first bill</a></p>
                 {% endif %}
             </div>
         </div>

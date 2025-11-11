@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}AI Demand Forecast - Admin{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="bi bi-graph-up-arrow"></i> AI Demand Forecasting</h2>
+        <hr>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-robot"></i> Forecast Insights (Next 30 Days)</h5>
+            </div>
+            <div class="card-body">
+                {% if insights %}
+                <div class="list-group">
+                    {% for insight in insights %}
+                    <div class="list-group-item">
+                        <h6 class="mb-1">{{ insight.item_name }}</h6>
+                        <p class="mb-1"><strong>Tamil:</strong> {{ insight.tamil }}</p>
+                        <p class="mb-0"><strong>English:</strong> {{ insight.english }}</p>
+                        <small class="text-muted">
+                            Current Avg: {{ "%.2f"|format(insight.avg_actual) }} | 
+                            Predicted Avg: {{ "%.2f"|format(insight.avg_predicted) }} | 
+                            Change: {{ "%.1f"|format(insight.change_percent) }}%
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No forecast insights available. Create some bills to generate forecasts.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if forecasts %}
+<div class="row">
+    {% for item_id, forecast_data in forecasts.items() %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>{{ forecast_data.item_name }}</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="forecastChart{{ item_id }}" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+{% if forecasts %}
+{% for item_id, forecast_data in forecasts.items() %}
+const ctx{{ item_id }} = document.getElementById('forecastChart{{ item_id }}');
+if (ctx{{ item_id }}) {
+    const forecastData = {{ forecast_data.forecast|tojson }};
+    const dates = forecastData.map(d => new Date(d.ds).toLocaleDateString());
+    const predicted = forecastData.map(d => d.yhat);
+    const lower = forecastData.map(d => d.yhat_lower);
+    const upper = forecastData.map(d => d.yhat_upper);
+    
+    new Chart(ctx{{ item_id }}, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Predicted Demand',
+                data: predicted,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true
+            }, {
+                label: 'Upper Bound',
+                data: upper,
+                borderColor: 'rgba(255, 99, 132, 0.5)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                borderDash: [5, 5],
+                fill: false
+            }, {
+                label: 'Lower Bound',
+                data: lower,
+                borderColor: 'rgba(255, 99, 132, 0.5)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                borderDash: [5, 5],
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+{% endfor %}
+{% endif %}
+</script>
+{% endblock %}
+
