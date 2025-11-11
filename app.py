@@ -895,6 +895,20 @@ def admin_bills_export():
         download_name=f'bills_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
     )
 
+# ==================== DB INITIALIZATION UTILITIES ====================
+
+@app.route('/init-db')
+def init_db():
+    """
+    One-time route to create database tables.
+    """
+    try:
+        Base.metadata.create_all(engine)
+        return "✅ Database tables created successfully!"
+    except Exception as e:
+        import traceback
+        return f"❌ Database initialization failed:<br><pre>{traceback.format_exc()}</pre>"
+
 # ==================== AUTOMATION ====================
 
 def daily_sales_summary():
@@ -941,6 +955,13 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 # ==================== MAIN ====================
+
+# Create tables at startup (safe no-op if already created)
+try:
+    Base.metadata.create_all(engine)
+    print("✅ Tables verified/created successfully at startup.")
+except Exception as e:
+    print("⚠️ Database initialization error:", e)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
