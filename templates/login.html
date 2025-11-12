@@ -1,36 +1,63 @@
-{% extends "layout.html" %}
+<!DOCTYPE html>
+<html lang="ta">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crusher Billing Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: 'Noto Sans Tamil', sans-serif;
+        background: linear-gradient(135deg, #eef2f3 0%, #dbeafe 100%);
+      }
+    </style>
+  </head>
+  <body class="flex justify-center items-center min-h-screen">
+    <form
+      method="POST"
+      class="bg-white/80 backdrop-blur-xl border border-white/60 shadow-2xl rounded-2xl p-8 w-full max-w-md space-y-4"
+    >
+      <div class="text-center space-y-1">
+        <h2 class="text-lg font-bold text-slate-800">ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</h2>
+        <p class="text-xs text-slate-500">Sree Dhanalakshmi Blue Metals</p>
+      </div>
 
-{% block title %}Login - Crusher Billing{% endblock %}
+      {% if error %}
+      <p class="text-red-500 text-sm bg-red-100 border border-red-200 rounded-md px-3 py-2">{{ error }}</p>
+      {% endif %}
 
-{% block content %}
-<div class="flex items-center justify-center h-full">
-  <div class="w-full max-w-md space-y-3">
-    <div class="text-center mb-3">
-      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="mx-auto h-16 w-16 object-contain mb-2" onerror="this.style.display='none'">
-      <div class="text-lg font-semibold text-gray-800">Sree Dhanalakshmi Blue Metals</div>
-      <div class="text-xs text-gray-600">ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</div>
-    </div>
-    
-    <form method="POST" action="{{ url_for('login') }}" class="space-y-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
       <div>
-        <label class="block font-semibold text-sm mb-1">பயனர் பெயர் / Username</label>
-        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" id="username" name="username" required autofocus>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">பயனர் பெயர் / Username</label>
+        <input
+          name="username"
+          required
+          class="w-full border border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-300 rounded-md py-2 px-3"
+        />
       </div>
+
       <div>
-        <label class="block font-semibold text-sm mb-1">கடவுச்சொல் / Password</label>
-        <input type="password" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" id="password" name="password" required>
+        <label class="block text-sm font-semibold text-slate-700 mb-1">கடவுச்சொல் / Password</label>
+        <input
+          type="password"
+          name="password"
+          required
+          class="w-full border border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-300 rounded-md py-2 px-3"
+        />
       </div>
-      <div>
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">
-          <i class="bi bi-box-arrow-in-right"></i> Login
-        </button>
-      </div>
+
+      <button
+        type="submit"
+        class="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-semibold py-2.5 rounded-lg shadow-lg shadow-blue-100"
+      >
+        Login
+      </button>
     </form>
-    
-    <div class="text-center">
-      <a href="{{ url_for('setup') }}" class="text-xs text-blue-600 hover:underline">Initialize Database</a>
-    </div>
-  </div>
-</div>
-{% endblock %}
+  </body>
+</html>
