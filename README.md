@@ -2,15 +2,16 @@
 
 This update modernizes the UI, adds Tamil print/PDF support, integrates logo branding, and hardens security without changing routes, APIs, or database models.
 
-## What's New
-- TailwindCSS + custom glass theme (`static/css/glass.css`)
-- Bilingual UI labels (Tamil-English), mobile responsive layouts
-- Tamil font embedded for HTML and PDF (`NotoSansTamil-Regular.ttf`)
-- Logo integration across navbar, dashboard, invoice (HTML + PDF), footer watermark
-- Print/PDF fixes with watermark and crisp logo
-- Front-end enhancements in `static/js/ui-enhance.js`
-- Security: HTTPS headers (Flask-Talisman), CSRF, Rate limiting, secure cookies
-- Performance/ops: gunicorn ready, daily DB backup, SQLite bill number lock
+## What's New (Vercel-Ready Upgrade)
+
+- ✅ **Vercel Deployment Ready** - Configured with `vercel.json` and optimized dependencies
+- ✅ **Modern UI/UX** - TailwindCSS with glass-style cards, responsive design
+- ✅ **Tamil Font Support** - Google Fonts (Noto Sans Tamil) + local font fallback
+- ✅ **Bilingual UI** - Tamil-English labels throughout, perfectly aligned layouts
+- ✅ **Print/PDF Fixes** - Proper Tamil font rendering in PDFs and print pages
+- ✅ **Mobile Responsive** - Sticky bottom buttons, auto-collapsing layouts
+- ✅ **Security Enhanced** - Flask-Talisman, CSRF protection, rate limiting, secure cookies
+- ✅ **Optimized Dependencies** - Removed heavy packages (APScheduler, pandas, numpy) for Vercel
 
 ## Assets to Provide
 1) Place these files (recommended sizes):
@@ -214,7 +215,40 @@ crusher-billing/
 - Weekly forecast update on Sunday midnight
 - Auto rate suggestion based on historical data
 
-## Deployment on Render
+## Deployment
+
+### Deployment on Vercel (Recommended)
+
+1. **Push your code to GitHub**
+   ```bash
+   git add .
+   git commit -m "Ready for Vercel deployment"
+   git push origin main
+   ```
+
+2. **Go to [Vercel](https://vercel.com/new)**
+   - Click "Import Project"
+   - Select your GitHub repository
+   - Vercel will auto-detect the Python runtime and `@vercel/python` builder
+
+3. **Configure Environment Variables** (if needed):
+   - `SECRET_KEY`: Generate a secure secret key
+   - Add any other required environment variables
+
+4. **Deploy**
+   - Vercel will automatically:
+     - Detect `vercel.json` configuration
+     - Use Python 3.12.7 (from `runtime.txt`)
+     - Install dependencies from `requirements.txt`
+     - Deploy your Flask app
+
+5. **Access your app**
+   - After deployment, visit: `https://your-project.vercel.app`
+   - Initialize database: `https://your-project.vercel.app/setup`
+
+**Note**: Vercel uses serverless functions, so scheduled tasks (APScheduler) are removed. Use Vercel Cron Jobs or external services for scheduled tasks.
+
+### Deployment on Render
 
 1. **Create a new Web Service** on Render
 2. **Connect your repository**

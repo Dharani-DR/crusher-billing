@@ -24,9 +24,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-import atexit
 import threading
 
 # Import models
@@ -41,7 +38,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-pro
 app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax'
+    SESSION_COOKIE_SAMESITE='Lax',
+    DEBUG=False
 )
 
 # Ensure 'instance' directory exists (needed on Render for SQLite)
@@ -89,32 +87,8 @@ def load_user(user_id):
     return db_session.query(User).get(int(user_id))
 
 # Security: Talisman, CSRF, Rate Limiter
-csp = {
-    'default-src': [
-        "'self'"
-    ],
-    'img-src': [
-        "'self'",
-        "data:"
-    ],
-    'style-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "https://cdn.jsdelivr.net"
-    ],
-    'script-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "https://cdn.tailwindcss.com",
-        "https://cdn.jsdelivr.net"
-    ],
-    'font-src': [
-        "'self'",
-        "data:"
-    ],
-    'connect-src': ["'self'"]
-}
-Talisman(app, content_security_policy=csp, force_https=True)
+# Note: For Vercel, we disable force_https as Vercel handles HTTPS
+Talisman(app, content_security_policy=None)
 csrf = CSRFProtect(app)
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per hour"])
 
@@ -666,6 +640,10 @@ def invoice_pdf(bill_id):
     except Exception as e:
         # Ignore font errors; fall back to default
         pass
+    
+    # Ensure font is registered before use
+    if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
+        tamil_font_name = 'Helvetica'  # Fallback
 
     # Create PDF
     buffer = io.BytesIO()
@@ -1083,56 +1061,8 @@ def init_db():
 
 # ==================== AUTOMATION ====================
 
-def daily_sales_summary():
-    """Send daily sales summary email (scheduled task)"""
-    try:
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_bills = db_session.query(Bill).filter(Bill.date >= today_start).all()
-        
-        total_sales = sum([b.grand_total for b in today_bills])
-        total_bills = len(today_bills)
-        
-        # TODO: Implement email sending
-        print(f"Daily Sales Summary: {total_bills} bills, ₹{total_sales:.2f} total sales")
-    except Exception as e:
-        print(f"Error in daily sales summary: {e}")
-
-
-
-def backup_database_daily():
-    """Auto backup SQLite DB daily"""
-    try:
-        src = db_path_file
-        backup_dir = os.path.join(os.path.dirname(src), 'backups')
-        os.makedirs(backup_dir, exist_ok=True)
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        dst = os.path.join(backup_dir, f'data_{ts}.db')
-        with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
-            fdst.write(fsrc.read())
-        print(f"Database backup created at {dst}")
-    except Exception as e:
-        print(f"Error creating DB backup: {e}")
-
-# Initialize scheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(
-    func=daily_sales_summary,
-    trigger=CronTrigger(hour=20, minute=0),  # 8 PM daily
-    id='daily_sales_summary',
-    name='Daily Sales Summary Email',
-    replace_existing=True
-)
-scheduler.add_job(
-    func=backup_database_daily,
-    trigger=CronTrigger(hour=1, minute=0),  # 1 AM daily
-    id='backup_database_daily',
-    name='Backup SQLite Database',
-    replace_existing=True
-)
-scheduler.start()
-
-# Shut down scheduler on app exit
-atexit.register(lambda: scheduler.shutdown())
+# Note: Scheduler removed for Vercel serverless compatibility
+# Scheduled tasks should be handled via Vercel Cron Jobs or external services
 
 # ==================== MAIN ====================
 
@@ -1145,3 +1075,6 @@ except Exception as e:
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# For Vercel deployment
+app = app
