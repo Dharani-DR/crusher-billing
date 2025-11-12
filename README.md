@@ -246,7 +246,15 @@ crusher-billing/
    - After deployment, visit: `https://your-project.vercel.app`
    - Initialize database: `https://your-project.vercel.app/setup`
 
-**Note**: Vercel uses serverless functions, so scheduled tasks (APScheduler) are removed. Use Vercel Cron Jobs or external services for scheduled tasks.
+**Important Notes for Vercel Deployment**:
+
+- **Database**: The app uses in-memory SQLite on Vercel (data doesn't persist between function invocations). For production, consider:
+  - **Vercel Postgres** (recommended) - Add via Vercel dashboard
+  - **External database** (PostgreSQL, MySQL, etc.) - Update `SQLALCHEMY_DATABASE_URI` in environment variables
+  
+- **Scheduled Tasks**: APScheduler removed for serverless compatibility. Use Vercel Cron Jobs or external services.
+
+- **File Storage**: Static files (fonts, images) must be in the repository. Database files are not persisted.
 
 ### Deployment on Render
 

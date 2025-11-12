@@ -42,34 +42,69 @@ app.config.update(
     DEBUG=False
 )
 
-# Ensure 'instance' directory exists (needed on Render for SQLite)
-instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
-os.makedirs(instance_path, exist_ok=True)
+# Vercel serverless compatibility: Use in-memory SQLite for Vercel, file-based for local/dev
+# Detect Vercel environment
+IS_VERCEL = os.getenv('VERCEL', '0') == '1' or os.getenv('VERCEL_ENV') is not None
 
-# Define SQLite DB path safely and auto-create file
-db_path_file = os.path.join(instance_path, 'data.db')
-if not os.path.exists(db_path_file):
-    open(db_path_file, 'a').close()
+if IS_VERCEL:
+    # Vercel: Use in-memory SQLite (data persists only during function execution)
+    # For production, consider using Vercel Postgres or external database
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    print("🔵 Running on Vercel - using in-memory SQLite")
+else:
+    # Local/Dev: Use file-based SQLite
+    try:
+        instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+        os.makedirs(instance_path, exist_ok=True)
+        db_path_file = os.path.join(instance_path, 'data.db')
+        if not os.path.exists(db_path_file):
+            open(db_path_file, 'a').close()
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path_file.replace(os.sep, "/")}'
+        print("🟢 Running locally - using file-based SQLite")
+    except (OSError, PermissionError) as e:
+        # Fallback to in-memory if file operations fail
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        print(f"⚠️ File operations failed, using in-memory SQLite: {e}")
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path_file.replace(os.sep, "/")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Runtime error log file and global error handler
-LOG_FILE = '/tmp/runtime_error.log'
+# Runtime error log file and global error handler (Vercel-compatible)
+LOG_FILE = '/tmp/runtime_error.log' if IS_VERCEL or os.path.exists('/tmp') else None
 
 @app.errorhandler(Exception)
 def handle_exception(e):
-    with open(LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write("\n==== ERROR OCCURRED ====\n")
-        traceback.print_exc(file=f)
+    # Log errors safely (works in Vercel /tmp, fails gracefully otherwise)
+    if LOG_FILE:
+        try:
+            with open(LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(f"\n==== ERROR OCCURRED {datetime.now()} ====\n")
+                traceback.print_exc(file=f)
+        except (OSError, PermissionError):
+            pass  # Silently fail if logging not possible
     return jsonify({"error": "Internal Server Error"}), 500
 
 @app.route("/debug-log")
 def show_debug():
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'r', encoding='utf-8') as f:
-            return "<pre>" + f.read() + "</pre>"
+    if LOG_FILE and os.path.exists(LOG_FILE):
+        try:
+            with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                return "<pre>" + f.read() + "</pre>"
+        except (OSError, PermissionError):
+            return "Log file not accessible."
     return "No errors logged yet."
+
+# Register Tamil font early (before PDF generation)
+tamil_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts', 'NotoSansTamil-Regular.ttf')
+tamil_font_name = 'NotoTamil'
+try:
+    if os.path.exists(tamil_font_path):
+        if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(tamil_font_name, tamil_font_path))
+            print(f"✅ Tamil font registered: {tamil_font_name}")
+    else:
+        print(f"⚠️ Tamil font not found at: {tamil_font_path}")
+except Exception as e:
+    print(f"⚠️ Could not register Tamil font: {e}")
 
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False)
 Session = sessionmaker(bind=engine)
@@ -148,6 +183,11 @@ def suggest_rate(item_id):
     return None
 
 # ==================== ROUTES ====================
+
+@app.route('/ping')
+def ping():
+    """Health check endpoint for Vercel"""
+    return jsonify({"status": "ok", "environment": "vercel" if IS_VERCEL else "local"})
 
 @app.route('/')
 def index():
@@ -630,18 +670,7 @@ def invoice_pdf(bill_id):
     
     company_settings = get_company_settings()
 
-    # Register Tamil font if present
-    tamil_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts', 'NotoSansTamil-Regular.ttf')
-    tamil_font_name = 'NotoTamil'
-    try:
-        if os.path.exists(tamil_font_path):
-            if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont(tamil_font_name, tamil_font_path))
-    except Exception as e:
-        # Ignore font errors; fall back to default
-        pass
-    
-    # Ensure font is registered before use
+    # Use registered Tamil font or fallback (font registered at startup)
     if tamil_font_name not in pdfmetrics.getRegisteredFontNames():
         tamil_font_name = 'Helvetica'  # Fallback
 
