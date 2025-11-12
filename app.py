@@ -81,7 +81,14 @@ def handle_exception(e):
                 traceback.print_exc(file=f)
         except (OSError, PermissionError):
             pass  # Silently fail if logging not possible
-    return jsonify({"error": "Internal Server Error"}), 500
+    
+    # Always render template instead of JSON for user-facing errors
+    try:
+        error_msg = str(e) if not IS_VERCEL else "An error occurred. Please try again."
+        return render_template('error.html', error=error_msg), 500
+    except:
+        # Fallback if error template doesn't exist
+        return f"<h1>Error</h1><p>{str(e)}</p>", 500
 
 @app.route("/debug-log")
 def show_debug():
@@ -106,7 +113,8 @@ try:
 except Exception as e:
     print(f"⚠️ Could not register Tamil font: {e}")
 
-engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False)
+# Database engine and session (created after app config)
+engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False, connect_args={'check_same_thread': False} if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI'] else {})
 Session = sessionmaker(bind=engine)
 db_session = Session()
 bill_lock = threading.Lock()
@@ -1095,15 +1103,47 @@ def init_db():
 
 # ==================== MAIN ====================
 
-# Create tables at startup (safe no-op if already created)
-try:
-    Base.metadata.create_all(engine)
-    print("✅ Tables verified/created successfully at startup.")
-except Exception as e:
-    print("⚠️ Database initialization error:", e)
+def create_app():
+    """App factory for Vercel compatibility - ensures database is initialized"""
+    try:
+        with app.app_context():
+            # Create all tables
+            Base.metadata.create_all(engine)
+            print("✅ Tables verified/created successfully.")
+            
+            # Initialize default data if database is empty
+            try:
+                if not db_session.query(User).first():
+                    admin = User(
+                        username='admin',
+                        password_hash=generate_password_hash('admin123'),
+                        role='admin'
+                    )
+                    db_session.add(admin)
+                    
+                    user = User(
+                        username='user',
+                        password_hash=generate_password_hash('user123'),
+                        role='user'
+                    )
+                    db_session.add(user)
+                    
+                    # Initialize company settings
+                    get_company_settings()
+                    
+                    db_session.commit()
+                    print("✅ Default users and settings initialized.")
+            except Exception as e:
+                db_session.rollback()
+                print(f"⚠️ Could not initialize default data: {e}")
+    except Exception as e:
+        print(f"⚠️ Database initialization error: {e}")
+        # Don't fail app creation - let it continue
+    
+    return app
+
+# Initialize app for Vercel
+app = create_app()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-# For Vercel deployment
-app = app
