@@ -1,110 +1,98 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
-{% block title %}Billing - Sri Dhanalakshmi Blue Metals{% endblock %}
-
-{% block extra_css %}{% endblock %}
+{% block title %}Billing - Crusher Billing{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-    <h2 class="text-3xl font-semibold flex items-center gap-2 text-slate-800"><i class="bi bi-receipt"></i> <span>பில் உருவாக்கு / Create New Bill</span></h2>
+<div class="space-y-3">
+  <h2 class="text-xl font-bold text-gray-800 mb-2">பில் உருவாக்கு / Create New Bill</h2>
+  
+  <form method="POST" action="{{ url_for('billing') }}" id="billingForm" class="space-y-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="relative">
+        <label class="block font-semibold text-sm mb-1">வாடிக்கையாளர் பெயர் / Customer Name <span class="text-red-500">*</span></label>
+        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="customer_name" id="customer_name" required autocomplete="off">
+        <div id="customerSuggestions" class="absolute z-50 bg-white text-gray-900 rounded-md shadow-lg mt-1 w-full max-h-48 overflow-auto hidden border border-gray-200"></div>
+      </div>
+      
+      <div class="relative">
+        <label class="block font-semibold text-sm mb-1">வாகன எண் / Vehicle No <span class="text-red-500">*</span></label>
+        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400 uppercase" name="vehicle_number" id="vehicle_number" required autocomplete="off" placeholder="TN32AX3344">
+        <div id="vehicleSuggestions" class="absolute z-50 bg-white text-gray-900 rounded-md shadow-lg mt-1 w-full max-h-48 overflow-auto hidden border border-gray-200"></div>
+        <div class="text-xs text-gray-500 mt-1">Format: TN32AX3344</div>
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">GST Number</label>
+        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="customer_gst" id="customer_gst" autocomplete="off">
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">Phone</label>
+        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="customer_phone" id="customer_phone" autocomplete="off">
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">Vehicle Type</label>
+        <input type="text" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="vehicle_type" id="vehicle_type" placeholder="Truck, Lorry" autocomplete="off">
+      </div>
+      
+      <div class="md:col-span-2">
+        <label class="block font-semibold text-sm mb-1">Address</label>
+        <textarea class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="customer_address" id="customer_address" rows="2"></textarea>
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">பொருள் / Item <span class="text-red-500">*</span></label>
+        <select class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="item_id" id="item_id" required>
+          <option value="">Select Item...</option>
+          {% for item in items %}
+          <option value="{{ item.id }}" data-rate="{{ item.rate }}">{{ item.name }} - ₹{{ item.rate }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">அளவு / Qty <span class="text-red-500">*</span></label>
+        <input type="number" step="0.01" min="0.01" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="quantity" id="quantity" required>
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">விலை / Rate ₹ <span class="text-red-500">*</span></label>
+        <div class="flex gap-2">
+          <input type="number" step="0.01" min="0" class="flex-1 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="rate" id="rate" required>
+          <button type="button" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-md px-3 py-2 text-sm font-semibold" id="suggestRateBtn" title="Suggest rate"><i class="bi bi-lightbulb"></i></button>
+        </div>
+      </div>
+      
+      <div>
+        <label class="block font-semibold text-sm mb-1">Round-off</label>
+        <input type="number" step="0.01" class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-400" name="round_off" id="round_off" value="0">
+      </div>
+    </div>
+    
+    <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+      <div class="flex items-center justify-between text-sm mb-1">
+        <span class="text-gray-700">Subtotal:</span>
+        <strong class="text-gray-900" id="subtotal">₹0.00</strong>
+      </div>
+      <div class="flex items-center justify-between text-sm mb-1">
+        <span class="text-gray-700">CGST 2.5% + SGST 2.5%:</span>
+        <span class="text-gray-900" id="gst">₹0.00</span>
+      </div>
+      <div class="flex items-center justify-between text-base pt-2 border-t border-gray-300">
+        <span class="font-semibold text-gray-800">Grand Total:</span>
+        <strong class="text-blue-600 text-lg" id="grandTotal">₹0.00</strong>
+      </div>
+    </div>
+    
+    <div class="flex flex-col md:flex-row gap-3 mt-3">
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Generate Bill / பில் உருவாக்கு</button>
+      <a href="{% if current_user.role == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('dashboard') }}{% endif %}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm text-center">Cancel</a>
+    </div>
+  </form>
 </div>
-
-<form method="POST" action="{{ url_for('billing') }}" id="billingForm" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-	<input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
-	<div class="space-y-6">
-		<div class="bg-white/70 backdrop-blur-md rounded-xl shadow-lg p-6">
-			<h5 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800"><i class="bi bi-person"></i> <span>வாடிக்கையாளர் / Customer</span></h5>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-				<div class="md:col-span-2 relative">
-					<label class="block font-semibold text-slate-700 mb-2">வாடிக்கையாளர் பெயர் / Customer Name <span class="text-red-500">*</span></label>
-					<input type="text" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="customer_name" id="customer_name" required autocomplete="off">
-					<div id="customerSuggestions" class="absolute z-50 bg-white text-slate-900 rounded-lg shadow-xl mt-1 w-full max-h-56 overflow-auto hidden border border-slate-200"></div>
-				</div>
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">GST Number</label>
-					<input type="text" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="customer_gst" id="customer_gst" autocomplete="off">
-				</div>
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">Phone</label>
-					<input type="text" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="customer_phone" id="customer_phone" autocomplete="off">
-				</div>
-				<div class="md:col-span-2">
-					<label class="block font-semibold text-slate-700 mb-2">Address</label>
-					<textarea class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="customer_address" id="customer_address" rows="2"></textarea>
-				</div>
-			</div>
-		</div>
-
-		<div class="bg-white/70 backdrop-blur-md rounded-xl shadow-lg p-6">
-			<h5 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800"><i class="bi bi-truck"></i> <span>வாகனம் / Vehicle</span></h5>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-				<div class="relative">
-					<label class="block font-semibold text-slate-700 mb-2">வாகன எண் / Vehicle Number <span class="text-red-500">*</span></label>
-					<input type="text" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" name="vehicle_number" id="vehicle_number" autocomplete="off" required placeholder="TN32AX3344">
-					<div id="vehicleSuggestions" class="absolute z-50 bg-white text-slate-900 rounded-lg shadow-xl mt-1 w-full max-h-56 overflow-auto hidden border border-slate-200"></div>
-					<div class="text-xs text-slate-500 mt-1">Format: TN32AX3344</div>
-				</div>
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">Vehicle Type</label>
-					<input type="text" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="vehicle_type" id="vehicle_type" placeholder="Truck, Lorry" autocomplete="off">
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<div class="space-y-6">
-		<div class="bg-white/70 backdrop-blur-md rounded-xl shadow-lg p-6">
-			<h5 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800"><i class="bi bi-box"></i> <span>பொருள் / Item</span></h5>
-			<div class="grid grid-cols-1 gap-6">
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">பொருள் / Item <span class="text-red-500">*</span></label>
-					<select class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="item_id" id="item_id" required>
-						<option value="">Select Item...</option>
-						{% for item in items %}
-						<option value="{{ item.id }}" data-rate="{{ item.rate }}">{{ item.name }} - ₹{{ item.rate }}</option>
-						{% endfor %}
-					</select>
-				</div>
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">அளவு / Qty <span class="text-red-500">*</span></label>
-					<input type="number" step="0.01" min="0.01" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="quantity" id="quantity" required>
-				</div>
-				<div>
-					<label class="block font-semibold text-slate-700 mb-2">விலை / Rate ₹ <span class="text-red-500">*</span></label>
-					<div class="flex gap-2">
-						<input type="number" step="0.01" min="0" class="flex-1 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="rate" id="rate" required>
-						<button type="button" class="bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-lg px-4 py-2 font-semibold" id="suggestRateBtn" title="Suggest rate from last 3 bills"><i class="bi bi-lightbulb"></i> Suggest</button>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<div class="bg-white/70 backdrop-blur-md rounded-xl shadow-lg p-6">
-			<h5 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800"><i class="bi bi-calculator"></i> <span>கணக்கீடு / Summary</span></h5>
-			<div class="space-y-3 text-sm">
-				<div class="flex items-center justify-between"><span class="text-slate-700">Subtotal:</span><strong class="text-slate-900" id="subtotal">₹0.00</strong></div>
-				<div class="flex items-center justify-between"><span class="text-slate-700">CGST 2.5% + SGST 2.5%:</span><span class="text-slate-900" id="gst">₹0.00</span></div>
-				<div class="flex items-center justify-between gap-3">
-					<span class="text-slate-700">Round-off:</span>
-					<input type="number" step="0.01" class="w-32 border border-slate-300 rounded-lg px-3 py-2 text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500" name="round_off" id="round_off" value="0">
-				</div>
-				<div class="flex items-center justify-between text-lg pt-3 border-t border-slate-300"><span class="font-semibold text-slate-800"><strong>Grand Total:</strong></span><strong class="text-blue-600 text-xl" id="grandTotal">₹0.00</strong></div>
-			</div>
-		</div>
-	</div>
-
-	<div class="lg:col-span-2 action-bar bg-white/70 backdrop-blur-md rounded-xl shadow-lg p-4 flex gap-3 justify-end no-print">
-		<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg inline-flex items-center gap-2"><i class="bi bi-check-circle"></i> Save / சேமி</button>
-		<a href="{% if current_user.role == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('dashboard') }}{% endif %}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-6 py-2 rounded-lg inline-flex items-center gap-2"><i class="bi bi-x-circle"></i> Cancel</a>
-	</div>
-</form>
-
-<!-- Mobile Sticky Bottom Button Bar -->
-<div class="fixed bottom-0 left-0 w-full bg-white shadow-lg flex justify-around py-3 md:hidden z-50 border-t border-slate-200">
-	<button type="submit" form="billingForm" class="bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-2 rounded-lg"><i class="bi bi-check-circle"></i> Save</button>
-	<a href="{{ url_for('invoice_pdf', bill_id=0) if False else '#' }}" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg hidden"><i class="bi bi-download"></i> PDF</a>
-</div>
-<div class="h-16 md:hidden"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -126,14 +114,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let customerSearchTimeout;
     
-    // Customer autocomplete
     customerNameInput.addEventListener('input', function() {
         const query = this.value.trim();
         if (query.length < 2) {
             customerSuggestions.style.display = 'none';
             return;
         }
-        
         clearTimeout(customerSearchTimeout);
         customerSearchTimeout = setTimeout(() => {
             fetch(`{{ url_for('api_customers_search') }}?q=${encodeURIComponent(query)}`)
@@ -143,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         customerSuggestions.innerHTML = '';
                         data.forEach(customer => {
                             const div = document.createElement('div');
-                            div.className = 'px-3 py-2 hover:bg-slate-100 cursor-pointer';
+                            div.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm';
                             div.textContent = customer.name;
                             div.addEventListener('click', function() {
                                 customerNameInput.value = customer.name;
@@ -162,7 +148,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 300);
     });
     
-    // Hide suggestions when clicking outside
     document.addEventListener('click', function(e) {
         if (!customerNameInput.contains(e.target) && !customerSuggestions.contains(e.target)) {
             customerSuggestions.style.display = 'none';
@@ -172,7 +157,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-fill rate when item is selected
     itemSelect.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         if (selectedOption.value) {
@@ -182,14 +166,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Suggest rate button
     suggestRateBtn.addEventListener('click', function() {
         const itemId = itemSelect.value;
         if (!itemId) {
             alert('Please select an item first');
             return;
         }
-        
         fetch(`{{ url_for('api_suggest_rate', item_id=0) }}`.replace('0', itemId))
             .then(response => response.json())
             .then(data => {
@@ -202,16 +184,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
     
-    // Calculate totals
     function calculateTotals() {
         const quantity = parseFloat(quantityInput.value) || 0;
         const rate = parseFloat(rateInput.value) || 0;
         const roundOff = parseFloat(roundOffInput.value) || 0;
-        
         const subtotal = quantity * rate;
-        const gst = subtotal * 0.05; // 5% GST (2.5% + 2.5%)
+        const gst = subtotal * 0.05;
         const grandTotal = subtotal + gst + roundOff;
-        
         document.getElementById('subtotal').textContent = '₹' + subtotal.toFixed(2);
         document.getElementById('gst').textContent = '₹' + gst.toFixed(2);
         document.getElementById('grandTotal').textContent = '₹' + grandTotal.toFixed(2);
@@ -220,11 +199,8 @@ document.addEventListener('DOMContentLoaded', function() {
     quantityInput.addEventListener('input', calculateTotals);
     rateInput.addEventListener('input', calculateTotals);
     roundOffInput.addEventListener('input', calculateTotals);
-    
-    // Initial calculation
     calculateTotals();
 
-    // Vehicle autocomplete + uppercase + regex validate
     function validateVehicleFormat(value) {
         return /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/.test(value);
     }
@@ -242,7 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 vehicleSuggestions.innerHTML = '';
                 list.forEach(v => {
                     const div = document.createElement('div');
-                    div.className = 'px-3 py-2 hover:bg-slate-100 cursor-pointer';
+                    div.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm';
                     div.textContent = `${v.vehicle_number}${v.vehicle_type ? ' ('+v.vehicle_type+')' : ''}`;
                     div.addEventListener('click', () => {
                         vehicleInput.value = v.vehicle_number;
@@ -255,7 +231,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
 
-    // On submit validate vehicle format
     document.getElementById('billingForm').addEventListener('submit', function(e) {
         const v = vehicleInput.value.toUpperCase().trim();
         if (!validateVehicleFormat(v)) {
@@ -263,14 +238,6 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Invalid vehicle number. Expected format like TN32AX3344');
         }
     });
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e){
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.getElementById('billingForm').requestSubmit(); }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); const link = document.querySelector('[data-download-pdf]'); if (link) link.click(); }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); document.getElementById('billingForm').reset(); calculateTotals(); }
-    });
 });
 </script>
 {% endblock %}
-

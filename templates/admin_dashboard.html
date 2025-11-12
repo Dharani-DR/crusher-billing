@@ -1,176 +1,134 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
-{% block title %}Admin Dashboard - Sri Dhanalakshmi Blue Metals{% endblock %}
-
-{% block extra_css %}
-{% endblock %}
+{% block title %}Admin Dashboard - Crusher Billing{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-12">
-        <h2><i class="bi bi-speedometer2"></i> Admin Dashboard</h2>
-        <hr>
+<div class="space-y-3">
+  <h2 class="text-lg font-bold text-gray-800">Admin Dashboard</h2>
+  
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="bg-blue-50 rounded-md p-3 border border-blue-200">
+      <div class="text-xs text-gray-600 mb-1">Daily Sales</div>
+      <div class="text-xl font-semibold text-gray-800">₹{{ "%.2f"|format(today_sales) }}</div>
     </div>
-</div>
+    <div class="bg-green-50 rounded-md p-3 border border-green-200">
+      <div class="text-xs text-gray-600 mb-1">Monthly Sales</div>
+      <div class="text-xl font-semibold text-gray-800">₹{{ "%.2f"|format(monthly_sales) }}</div>
+    </div>
+    <div class="bg-purple-50 rounded-md p-3 border border-purple-200">
+      <div class="text-xs text-gray-600 mb-1">Total Sales</div>
+      <div class="text-xl font-semibold text-gray-800">₹{{ "%.2f"|format(total_sales) }}</div>
+    </div>
+    <div class="bg-orange-50 rounded-md p-3 border border-orange-200">
+      <div class="text-xs text-gray-600 mb-1">Total Bills</div>
+      <div class="text-xl font-semibold text-gray-800">{{ total_bills }}</div>
+    </div>
+  </div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-currency-rupee"></i> Daily Sales</h5>
-                <h2>₹{{ "%.2f"|format(today_sales) }}</h2>
-            </div>
-        </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+      <div class="text-xs text-gray-600 mb-1">Users</div>
+      <div class="text-lg font-semibold text-gray-800">{{ total_users }}</div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-success">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-calendar-month"></i> Monthly Sales</h5>
-                <h2>₹{{ "%.2f"|format(monthly_sales) }}</h2>
-            </div>
-        </div>
+    <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+      <div class="text-xs text-gray-600 mb-1">Customers</div>
+      <div class="text-lg font-semibold text-gray-800">{{ total_customers }}</div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-receipt"></i> Total Bills</h5>
-                <h2>{{ total_bills }}</h2>
-            </div>
-        </div>
+    <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+      <div class="text-xs text-gray-600 mb-1">Vehicles</div>
+      <div class="text-lg font-semibold text-gray-800">{{ total_vehicles }}</div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-warning">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-currency-rupee"></i> Total Revenue</h5>
-                <h2>₹{{ "%.2f"|format(total_sales) }}</h2>
-            </div>
-        </div>
+    <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+      <div class="text-xs text-gray-600 mb-1">Items</div>
+      <div class="text-lg font-semibold text-gray-800">{{ total_items }}</div>
     </div>
-</div>
+  </div>
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="bi bi-graph-up"></i> Monthly Sales Summary</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="monthlyChart" height="200"></canvas>
-            </div>
-        </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <div class="bg-white rounded-md border border-gray-200 p-3">
+      <h5 class="text-sm font-semibold text-gray-800 mb-2">Top Customers</h5>
+      <div class="scroll-container">
+        <table class="text-xs">
+          <thead class="bg-gray-100 font-semibold">
+            <tr>
+              <th class="px-2 py-1 text-left">Customer</th>
+              <th class="px-2 py-1 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for customer in top_customers %}
+            <tr class="border-b border-gray-100">
+              <td class="px-2 py-1">{{ customer.name }}</td>
+              <td class="px-2 py-1 text-right">₹{{ "%.2f"|format(customer.total) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="bi bi-people"></i> Top Customers</h5>
-            </div>
-            <div class="card-body">
-                {% if top_customers %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Customer</th>
-                                <th class="text-end">Total Sales</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for customer in top_customers %}
-                            <tr>
-                                <td>{{ customer.name }}</td>
-                                <td class="text-end">₹{{ "%.2f"|format(customer.total) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted">No data available.</p>
-                {% endif %}
-            </div>
-        </div>
+    
+    <div class="bg-white rounded-md border border-gray-200 p-3">
+      <h5 class="text-sm font-semibold text-gray-800 mb-2">Top Items</h5>
+      <div class="scroll-container">
+        <table class="text-xs">
+          <thead class="bg-gray-100 font-semibold">
+            <tr>
+              <th class="px-2 py-1 text-left">Item</th>
+              <th class="px-2 py-1 text-right">Qty</th>
+              <th class="px-2 py-1 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in top_items %}
+            <tr class="border-b border-gray-100">
+              <td class="px-2 py-1">{{ item.name }}</td>
+              <td class="px-2 py-1 text-right">{{ "%.2f"|format(item.total_qty) }}</td>
+              <td class="px-2 py-1 text-right">₹{{ "%.2f"|format(item.total_amount) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-</div>
+  </div>
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="bi bi-box"></i> Top-Selling Items</h5>
-            </div>
-            <div class="card-body">
-                {% if top_items %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th class="text-end">Quantity</th>
-                                <th class="text-end">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in top_items %}
-                            <tr>
-                                <td>{{ item.name }}</td>
-                                <td class="text-end">{{ "%.2f"|format(item.total_qty) }}</td>
-                                <td class="text-end">₹{{ "%.2f"|format(item.total_amount) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted">No data available.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
+  <div class="bg-white rounded-md border border-gray-200 p-3">
+    <h5 class="text-sm font-semibold text-gray-800 mb-2">Monthly Sales Chart</h5>
+    <canvas id="monthlyChart" class="w-full" style="max-height: 300px;"></canvas>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Monthly Sales Chart
-const monthlyCtx = document.getElementById('monthlyChart');
-if (monthlyCtx) {
-    const monthlyData = {{ monthly_data|tojson }};
-    new Chart(monthlyCtx, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.map(d => d.month),
-            datasets: [{
-                label: 'Sales (₹)',
-                data: monthlyData.map(d => d.sales),
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('monthlyChart');
+  if (ctx && window.Chart) {
+    const monthlyData = {{ monthly_data | tojson }};
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: monthlyData.map(d => d.month),
+        datasets: [{
+          label: 'Sales (₹)',
+          data: monthlyData.map(d => d.sales),
+          borderColor: 'rgb(59, 130, 246)',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return '₹' + value.toLocaleString();
-                        }
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                }
-            }
+        scales: {
+          y: { beginAtZero: true }
         }
+      }
     });
-}
+  }
+});
 </script>
 {% endblock %}
-
