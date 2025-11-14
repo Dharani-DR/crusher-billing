@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-const items = {{ items|tojson }};
+const items = {{ items_data|tojson }};
 
 function addItemRow() {
   const tbody = document.getElementById('itemsTable');

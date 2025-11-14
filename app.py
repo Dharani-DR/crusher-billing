@@ -465,19 +465,22 @@ def create_bill():
                 if not customer_name:
                     flash("Customer name is required", "danger")
                     items = Item.query.filter_by(is_active=True).all() or []
-                    return render_template("create_bill.html", items=items)
+                    items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                    return render_template("create_bill.html", items=items, items_data=items_data)
                 
                 if not vehicle_number:
                     flash("Vehicle number is required", "danger")
                     items = Item.query.filter_by(is_active=True).all() or []
-                    return render_template("create_bill.html", items=items)
+                    items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                    return render_template("create_bill.html", items=items, items_data=items_data)
                 
                 # Validate vehicle format
                 import re
                 if not re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$", vehicle_number):
                     flash("Invalid vehicle number format. Expected: TN32AX3344", "danger")
                     items = Item.query.filter_by(is_active=True).all() or []
-                    return render_template("create_bill.html", items=items)
+                    items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                    return render_template("create_bill.html", items=items, items_data=items_data)
                 
                 # Get or create customer
                 customer = Customer.query.filter_by(name=customer_name).first()
@@ -546,7 +549,8 @@ def create_bill():
                     db.session.rollback()
                     flash("At least one item with quantity and rate is required", "danger")
                     items = Item.query.filter_by(is_active=True).all() or []
-                    return render_template("create_bill.html", items=items)
+                    items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                    return render_template("create_bill.html", items=items, items_data=items_data)
                 
                 # Calculate GST
                 cgst = subtotal * (settings.cgst_percent / 100)
@@ -568,16 +572,20 @@ def create_bill():
                 import traceback
                 traceback.print_exc()
                 items = Item.query.filter_by(is_active=True).all() or []
-                return render_template("create_bill.html", items=items)
+                items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                return render_template("create_bill.html", items=items, items_data=items_data)
         
         # GET request - show form
         try:
             items = Item.query.filter_by(is_active=True).all()
+            # Convert to list of dicts for JSON serialization
+            items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
         except Exception as e:
             print(f"Error fetching items: {e}")
             items = []
+            items_data = []
         
-        return render_template("create_bill.html", items=items)
+        return render_template("create_bill.html", items=items, items_data=items_data)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -938,6 +946,80 @@ def backup_database():
         as_attachment=True,
         download_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
     )
+
+
+# ------------------------------------------------------------
+# Routes - Items Management
+# ------------------------------------------------------------
+@app.route("/items")
+@admin_required
+def items():
+    items_list = Item.query.order_by(Item.name).all()
+    return render_template("items.html", items=items_list)
+
+
+@app.route("/items/add", methods=["POST"])
+@admin_required
+def add_item():
+    try:
+        item = Item(
+            name=request.form.get("name", "").strip(),
+            rate=float(request.form.get("rate", 0)),
+            is_active=True,
+        )
+        db.session.add(item)
+        db.session.commit()
+        flash("Item added successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error adding item: {str(e)}", "danger")
+    return redirect(url_for("items"))
+
+
+@app.route("/items/<int:item_id>/edit", methods=["POST"])
+@admin_required
+def edit_item(item_id):
+    try:
+        item = Item.query.get_or_404(item_id)
+        item.name = request.form.get("name", "").strip()
+        item.rate = float(request.form.get("rate", 0))
+        item.is_active = request.form.get("is_active") == "on"
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash("Item updated successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating item: {str(e)}", "danger")
+    return redirect(url_for("items"))
+
+
+@app.route("/items/<int:item_id>/toggle", methods=["POST"])
+@admin_required
+def toggle_item(item_id):
+    try:
+        item = Item.query.get_or_404(item_id)
+        item.is_active = not item.is_active
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash(f"Item {'activated' if item.is_active else 'deactivated'} successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error toggling item: {str(e)}", "danger")
+    return redirect(url_for("items"))
+
+
+@app.route("/items/<int:item_id>/delete", methods=["POST"])
+@admin_required
+def delete_item(item_id):
+    try:
+        item = Item.query.get_or_404(item_id)
+        db.session.delete(item)
+        db.session.commit()
+        flash("Item deleted successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting item: {str(e)}", "danger")
+    return redirect(url_for("items"))
 
 
 # ------------------------------------------------------------
