@@ -20,7 +20,7 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-lg shadow-md border border-gray-200 p-6 print:shadow-none invoice-container">
+  <div id="print-section" class="bg-white rounded-lg shadow-md border border-gray-200 p-6 print:shadow-none invoice-container">
     <!-- Company Header -->
     <div class="text-center mb-6 pb-4 border-b border-gray-300">
       <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ settings.company_name_tamil }}</h2>
@@ -116,6 +116,7 @@
   src: url('{{ url_for("static", filename="fonts/NotoSansTamil-Regular.ttf") }}') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
 
 body {
@@ -124,35 +125,25 @@ body {
 
 @media print {
   @page {
-    size: A4;
-    margin: 10mm;
+    size: A4 portrait;
+    margin: 8mm;
   }
   
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  body {
-    background: white !important;
-    margin: 0;
-    padding: 0;
-  }
-  
-  /* Hide everything except invoice container */
-  body > *:not(.invoice-container) {
-    display: none !important;
-  }
-  
-  nav, .no-print, button, a:not(.print-link) {
-    display: none !important;
+  /* Hide everything by default */
+  body * {
     visibility: hidden !important;
   }
   
-  .invoice-container {
-    position: relative;
+  /* Show only print section */
+  #print-section, #print-section * {
+    visibility: visible !important;
+  }
+  
+  #print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
     width: 100%;
-    max-width: 100%;
     margin: 0;
     padding: 0;
     box-shadow: none !important;
@@ -161,38 +152,8 @@ body {
     page-break-inside: avoid;
   }
   
-  .bg-white {
-    background: white !important;
-  }
-  
-  /* Ensure table fits on page */
-  table {
-    width: 100%;
-    page-break-inside: avoid;
-  }
-  
-  tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
-  }
-  
-  thead {
-    display: table-header-group;
-  }
-  
-  tfoot {
-    display: table-footer-group;
-  }
-  
-  /* Signature block at bottom */
-  .signature-block {
-    margin-top: 40px;
-    width: 100%;
-    page-break-inside: avoid;
-  }
-  
   /* Remove shadows and animations */
-  * {
+  #print-section * {
     box-shadow: none !important;
     text-shadow: none !important;
     animation: none !important;
@@ -200,8 +161,40 @@ body {
   }
   
   /* Force Tamil font */
-  * {
+  #print-section * {
     font-family: 'NotoSansTamil', 'Noto Sans Tamil', 'Poppins', sans-serif !important;
+  }
+  
+  /* Ensure table fits on page */
+  #print-section table {
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  #print-section tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  #print-section thead {
+    display: table-header-group;
+  }
+  
+  #print-section tfoot {
+    display: table-footer-group;
+  }
+  
+  /* Signature block at bottom */
+  #print-section .signature-block {
+    margin-top: 40px;
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  /* Color adjustment for print */
+  #print-section * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
 </style>

@@ -65,9 +65,12 @@ class User(UserMixin, db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=True)
+    name = db.Column(db.String(200), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default="user")  # user, staff, admin
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=True)
+    status = db.Column(db.String(20), default="active")  # active, inactive
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -75,6 +78,9 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
+    
+    def is_active_user(self):
+        return self.status == "active"
 
 
 class Customer(db.Model):
@@ -158,6 +164,20 @@ class Settings(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AuditLog(db.Model):
+    __tablename__ = "audit_logs"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    action = db.Column(db.String(100), nullable=False)  # login, create_bill, edit_bill, delete_bill, etc.
+    resource_type = db.Column(db.String(50), nullable=True)  # invoice, user, customer, etc.
+    resource_id = db.Column(db.Integer, nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship("User")
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -218,6 +238,46 @@ def staff_required(f):
     return decorated_function
 
 
+def role_required(role):
+    """Decorator to require specific role"""
+    from functools import wraps
+    
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if role == "admin" and current_user.role != "admin":
+                flash("Admin access required", "danger")
+                return redirect(url_for("dashboard"))
+            elif role == "staff" and current_user.role not in ["staff", "admin"]:
+                flash("Staff or admin access required", "danger")
+                return redirect(url_for("dashboard"))
+            elif role == "user" and current_user.role not in ["user", "staff", "admin"]:
+                flash("Access denied", "danger")
+                return redirect(url_for("dashboard"))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def log_audit(action, resource_type=None, resource_id=None, details=None, ip_address=None):
+    """Log an audit event"""
+    try:
+        log = AuditLog(
+            user_id=current_user.id if current_user.is_authenticated else None,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            details=details,
+            ip_address=ip_address or request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error logging audit: {e}")
+        db.session.rollback()
+
+
 def get_user_invoices_query():
     """Get invoice query filtered by user role"""
     if current_user.role == "admin":
@@ -235,17 +295,48 @@ def init_db():
     """Create tables and seed default data if needed."""
     try:
         db.create_all()
+        
+        # Auto-migrate: Add new columns if they don't exist
+        try:
+            from sqlalchemy import inspect as sql_inspect
+            inspector = sql_inspect(db.engine)
+            if inspector.has_table('users'):
+                columns = [col['name'] for col in inspector.get_columns('users')]
+                
+                if 'email' not in columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(db.text('ALTER TABLE users ADD COLUMN email VARCHAR(150)'))
+                        conn.commit()
+                    print("✅ Added email column to users table")
+                
+                if 'name' not in columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(db.text('ALTER TABLE users ADD COLUMN name VARCHAR(200)'))
+                        conn.commit()
+                    print("✅ Added name column to users table")
+                
+                if 'status' not in columns:
+                    with db.engine.connect() as conn:
+                        conn.execute(db.text('ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT "active"'))
+                        conn.commit()
+                    print("✅ Added status column to users table")
+        except Exception as e:
+            print(f"⚠️ Migration note: {e}")
 
         # Create default admin user
-        if not User.query.filter_by(username="admin").first():
+        admin = User.query.filter_by(username="admin").first()
+        if not admin:
             admin = User(
                 username="admin",
-                password_hash=generate_password_hash("admin"),
+                email="admin@nrd",
+                name="Administrator",
+                password_hash=generate_password_hash("nrd"),
                 role="admin",
+                status="active"
             )
             db.session.add(admin)
             db.session.commit()
-            print("✅ Default admin user created")
+            print("✅ Default admin user created (email: admin@nrd, password: nrd)")
 
         # Create default items
         if Item.query.count() == 0:
@@ -269,6 +360,8 @@ def init_db():
         return True
     except Exception as err:
         print("⚠️ DB initialization error:", err)
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -298,9 +391,12 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
+            if user.status != "active":
+                return render_template("login.html", error="Your account is inactive. Please contact administrator.")
             user.last_login = datetime.utcnow()
             db.session.commit()
             login_user(user)
+            log_audit("login", ip_address=request.remote_addr)
             return redirect(url_for("dashboard"))
 
         return render_template("login.html", error="தவறான பயனர் பெயர் அல்லது கடவுச்சொல்")
@@ -311,6 +407,7 @@ def login():
 @app.route("/logout")
 def logout():
     if current_user.is_authenticated:
+        log_audit("logout", ip_address=request.remote_addr)
         logout_user()
     flash("Logged out successfully", "info")
     return redirect(url_for("login"))
@@ -631,6 +728,7 @@ def create_bill():
                 invoice.grand_total = grand_total
                 
                 db.session.commit()
+                log_audit("create_bill", "invoice", invoice.id, f"Bill {invoice.bill_no} created", request.remote_addr)
                 flash("Bill created successfully!", "success")
                 return redirect(url_for("invoice_detail", invoice_id=invoice.id))
                 
@@ -823,6 +921,7 @@ def duplicate_invoice(invoice_id):
             db.session.add(new_item)
         
         db.session.commit()
+        log_audit("duplicate_bill", "invoice", new_invoice.id, f"Bill {new_invoice.bill_no} duplicated from {original.bill_no}", request.remote_addr)
         flash("Invoice duplicated successfully", "success")
         return redirect(url_for("invoice_detail", invoice_id=new_invoice.id))
     except Exception as e:
@@ -836,8 +935,10 @@ def duplicate_invoice(invoice_id):
 def delete_invoice(invoice_id):
     try:
         invoice = Invoice.query.get_or_404(invoice_id)
+        bill_no = invoice.bill_no
         db.session.delete(invoice)
         db.session.commit()
+        log_audit("delete_bill", "invoice", invoice_id, f"Bill {bill_no} deleted", request.remote_addr)
         flash("Invoice deleted successfully", "success")
     except Exception as e:
         db.session.rollback()
@@ -1199,6 +1300,131 @@ def delete_item(item_id):
         db.session.rollback()
         flash(f"Error deleting item: {str(e)}", "danger")
     return redirect(url_for("items"))
+
+
+# ------------------------------------------------------------
+# Routes - Admin Panel
+# ------------------------------------------------------------
+@app.route("/admin")
+@role_required("admin")
+def admin_panel():
+    return render_template("admin_panel.html")
+
+
+@app.route("/admin/users")
+@role_required("admin")
+def admin_users():
+    users = User.query.order_by(User.created_at.desc()).all()
+    customers = Customer.query.order_by(Customer.name).all()
+    return render_template("admin_users.html", users=users, customers=customers)
+
+
+@app.route("/admin/users/add", methods=["POST"])
+@role_required("admin")
+def admin_add_user():
+    try:
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        name = request.form.get("name", "").strip()
+        password = request.form.get("password", "").strip()
+        role = request.form.get("role", "user").strip()
+        customer_id = request.form.get("customer_id", type=int) or None
+        
+        if not username or not password:
+            flash("Username and password are required", "danger")
+            return redirect(url_for("admin_users"))
+        
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists", "danger")
+            return redirect(url_for("admin_users"))
+        
+        user = User(
+            username=username,
+            email=email or None,
+            name=name or None,
+            password_hash=generate_password_hash(password),
+            role=role,
+            customer_id=customer_id,
+            status="active"
+        )
+        db.session.add(user)
+        db.session.commit()
+        log_audit("create_user", "user", user.id, f"User {username} created with role {role}", request.remote_addr)
+        flash("User created successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error creating user: {str(e)}", "danger")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/edit", methods=["POST"])
+@role_required("admin")
+def admin_edit_user(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+        user.email = request.form.get("email", "").strip() or None
+        user.name = request.form.get("name", "").strip() or None
+        user.role = request.form.get("role", "user").strip()
+        user.customer_id = request.form.get("customer_id", type=int) or None
+        user.status = request.form.get("status", "active").strip()
+        
+        password = request.form.get("password", "").strip()
+        if password:
+            user.password_hash = generate_password_hash(password)
+        
+        db.session.commit()
+        log_audit("edit_user", "user", user.id, f"User {user.username} updated", request.remote_addr)
+        flash("User updated successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating user: {str(e)}", "danger")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@role_required("admin")
+def admin_delete_user(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+        if user.id == current_user.id:
+            flash("Cannot delete your own account", "danger")
+            return redirect(url_for("admin_users"))
+        username = user.username
+        db.session.delete(user)
+        db.session.commit()
+        log_audit("delete_user", "user", user_id, f"User {username} deleted", request.remote_addr)
+        flash("User deleted successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting user: {str(e)}", "danger")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/audit-logs")
+@role_required("admin")
+def admin_audit_logs():
+    from sqlalchemy import select
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
+    logs_query = AuditLog.query.order_by(desc(AuditLog.created_at))
+    total = logs_query.count()
+    logs = logs_query.offset((page - 1) * per_page).limit(per_page).all()
+    
+    # Create pagination object manually
+    class Pagination:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+    
+    pagination = Pagination(logs, page, per_page, total)
+    return render_template("admin_audit_logs.html", logs=pagination)
 
 
 # ------------------------------------------------------------
