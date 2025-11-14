@@ -19,12 +19,19 @@ import os
 import io
 import csv
 import json
+import re
+from functools import wraps
+from flask import session
 
 # ------------------------------------------------------------
 # Flask configuration
 # ------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "crusher-secret")
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 8 hour session timeout
 
 RUNNING_ON_VERCEL = os.getenv("VERCEL", "0") == "1"
 if RUNNING_ON_VERCEL:
@@ -130,6 +137,8 @@ class Invoice(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     from_location = db.Column(db.String(100), default="நெமிலி")
+    delivery_location = db.Column(db.String(200), nullable=True)
+    has_waybill = db.Column(db.Boolean, default=False)
 
     customer = db.relationship("Customer", back_populates="invoices")
     vehicle = db.relationship("Vehicle", back_populates="invoices")
@@ -149,6 +158,21 @@ class InvoiceItem(db.Model):
     invoice = db.relationship("Invoice", back_populates="items")
 
 
+class Waybill(db.Model):
+    __tablename__ = "waybills"
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.id"), nullable=False, unique=True)
+    driver_name = db.Column(db.String(200), nullable=True)
+    loading_time = db.Column(db.DateTime, nullable=True)
+    unloading_time = db.Column(db.DateTime, nullable=True)
+    material_type = db.Column(db.String(200), nullable=True)
+    vehicle_capacity = db.Column(db.String(100), nullable=True)
+    delivery_location = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    invoice = db.relationship("Invoice", backref="waybill")
+
+
 class Settings(db.Model):
     __tablename__ = "settings"
     id = db.Column(db.Integer, primary_key=True)
@@ -161,6 +185,12 @@ class Settings(db.Model):
     cgst_percent = db.Column(db.Float, default=2.5)
     sgst_percent = db.Column(db.Float, default=2.5)
     from_location = db.Column(db.String(100), default="நெமிலி")
+    # Messaging settings
+    sms_api_key = db.Column(db.String(200), nullable=True)
+    sms_sender_id = db.Column(db.String(50), nullable=True)
+    whatsapp_sender_number = db.Column(db.String(20), nullable=True)
+    sms_template = db.Column(db.Text, nullable=True)
+    whatsapp_template = db.Column(db.Text, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -673,6 +703,9 @@ def create_bill():
                 # Create invoice
                 settings = get_settings()
                 bill_no = get_next_bill_no()
+                delivery_location = request.form.get("delivery_location", "").strip() or None
+                has_waybill = request.form.get("generate_waybill") == "on"
+                
                 invoice = Invoice(
                     bill_no=bill_no,
                     date=datetime.strptime(bill_date, "%Y-%m-%d"),
@@ -680,9 +713,43 @@ def create_bill():
                     vehicle_id=vehicle.id,
                     user_id=current_user.id,
                     from_location=settings.from_location,
+                    delivery_location=delivery_location,
+                    has_waybill=has_waybill,
                 )
                 db.session.add(invoice)
                 db.session.flush()
+                
+                # Create waybill if requested
+                if has_waybill:
+                    driver_name = request.form.get("driver_name", "").strip() or None
+                    loading_time_str = request.form.get("loading_time", "").strip()
+                    unloading_time_str = request.form.get("unloading_time", "").strip()
+                    material_type = request.form.get("material_type", "").strip() or None
+                    vehicle_capacity = request.form.get("vehicle_capacity", "").strip() or None
+                    
+                    loading_time = None
+                    unloading_time = None
+                    if loading_time_str:
+                        try:
+                            loading_time = datetime.strptime(loading_time_str, "%Y-%m-%dT%H:%M")
+                        except:
+                            pass
+                    if unloading_time_str:
+                        try:
+                            unloading_time = datetime.strptime(unloading_time_str, "%Y-%m-%dT%H:%M")
+                        except:
+                            pass
+                    
+                    waybill = Waybill(
+                        invoice_id=invoice.id,
+                        driver_name=driver_name,
+                        loading_time=loading_time,
+                        unloading_time=unloading_time,
+                        material_type=material_type,
+                        vehicle_capacity=vehicle_capacity,
+                        delivery_location=delivery_location,
+                    )
+                    db.session.add(waybill)
                 
                 # Process items
                 item_names = request.form.getlist("item_name[]")
@@ -827,7 +894,11 @@ def invoice_pdf(invoice_id):
         c.drawString(60, y, f"GST No: {invoice.customer.gst_number}")
         y -= 20
     c.drawString(60, y, f"வாகன எண் / Vehicle: {invoice.vehicle.vehicle_number if invoice.vehicle else 'N/A'}")
-    y -= 30
+    y -= 20
+    if invoice.delivery_location:
+        c.drawString(60, y, f"விநியோக இடம் / Delivery Location: {invoice.delivery_location}")
+        y -= 20
+    y -= 10
     
     # Items table header
     c.setFont(font_name, 11)
@@ -864,11 +935,35 @@ def invoice_pdf(invoice_id):
     c.drawString(300, y, f"Grand Total: ₹{invoice.grand_total:.2f}")
     y -= 40
     
+    # Waybill information if exists
+    if invoice.has_waybill and invoice.waybill:
+        y -= 20
+        c.setFont(font_name, 11)
+        c.drawString(60, y, "வேய்பில் தகவல் / Waybill Information:")
+        y -= 20
+        c.setFont("Helvetica", 10)
+        if invoice.waybill.driver_name:
+            c.drawString(60, y, f"Driver Name: {invoice.waybill.driver_name}")
+            y -= 15
+        if invoice.waybill.material_type:
+            c.drawString(60, y, f"Material Type: {invoice.waybill.material_type}")
+            y -= 15
+        if invoice.waybill.loading_time:
+            c.drawString(60, y, f"Loading Time: {invoice.waybill.loading_time.strftime('%d-%m-%Y %H:%M')}")
+            y -= 15
+        if invoice.waybill.unloading_time:
+            c.drawString(60, y, f"Unloading Time: {invoice.waybill.unloading_time.strftime('%d-%m-%Y %H:%M')}")
+            y -= 15
+        if invoice.waybill.vehicle_capacity:
+            c.drawString(60, y, f"Vehicle Capacity: {invoice.waybill.vehicle_capacity}")
+            y -= 15
+        y -= 10
+    
     # Footer with signature block
-    y -= 30
+    y -= 20
     c.setFont(font_name, 10)
     c.drawString(60, y, "அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்")
-    y -= 40
+    y -= 30
     
     # Signature area
     c.setFont("Helvetica", 10)
@@ -1425,6 +1520,132 @@ def admin_audit_logs():
     
     pagination = Pagination(logs, page, per_page, total)
     return render_template("admin_audit_logs.html", logs=pagination)
+
+
+@app.route("/admin/messaging", methods=["GET", "POST"])
+@role_required("admin")
+def admin_messaging():
+    if request.method == "POST":
+        try:
+            settings = get_settings()
+            settings.sms_api_key = request.form.get("sms_api_key", "").strip() or None
+            settings.sms_sender_id = request.form.get("sms_sender_id", "").strip() or None
+            settings.whatsapp_sender_number = request.form.get("whatsapp_sender_number", "").strip() or None
+            settings.sms_template = request.form.get("sms_template", "").strip() or None
+            settings.whatsapp_template = request.form.get("whatsapp_template", "").strip() or None
+            db.session.commit()
+            flash("Messaging settings updated successfully", "success")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating settings: {str(e)}", "danger")
+    
+    settings = get_settings()
+    return render_template("admin_messaging.html", settings=settings)
+
+
+@app.route("/admin/messaging/test-sms", methods=["POST"])
+@role_required("admin")
+def test_sms():
+    # Placeholder for SMS testing - integrate with actual SMS API
+    flash("SMS test functionality - integrate with SMS API provider", "info")
+    return redirect(url_for("admin_messaging"))
+
+
+@app.route("/admin/messaging/test-whatsapp", methods=["POST"])
+@role_required("admin")
+def test_whatsapp():
+    # Placeholder for WhatsApp testing - integrate with WhatsApp API
+    flash("WhatsApp test functionality - integrate with WhatsApp API provider", "info")
+    return redirect(url_for("admin_messaging"))
+
+
+@app.route("/admin/backup-page")
+@role_required("admin")
+def admin_backup_page():
+    """Backup/Restore page"""
+    return render_template("admin_backup.html")
+
+
+@app.route("/admin/backup")
+@role_required("admin")
+def admin_backup():
+    """Download database backup"""
+    try:
+        backup_data = {
+            "customers": [{"id": c.id, "name": c.name, "gst_number": c.gst_number, "phone": c.phone, "address": c.address} for c in Customer.query.all()],
+            "vehicles": [{"id": v.id, "vehicle_number": v.vehicle_number, "vehicle_type": v.vehicle_type, "customer_id": v.customer_id} for v in Vehicle.query.all()],
+            "invoices": [
+                {
+                    "id": inv.id,
+                    "bill_no": inv.bill_no,
+                    "date": inv.date.isoformat(),
+                    "customer_id": inv.customer_id,
+                    "vehicle_id": inv.vehicle_id,
+                    "grand_total": inv.grand_total,
+                    "delivery_location": inv.delivery_location,
+                    "has_waybill": inv.has_waybill,
+                }
+                for inv in Invoice.query.all()
+            ],
+            "users": [{"id": u.id, "username": u.username, "email": u.email, "name": u.name, "role": u.role, "status": u.status} for u in User.query.all()],
+            "settings": {
+                "company_name_tamil": get_settings().company_name_tamil,
+                "company_name_english": get_settings().company_name_english,
+                "gstin": get_settings().gstin,
+            },
+            "backup_date": datetime.now().isoformat(),
+        }
+        
+        return send_file(
+            io.BytesIO(json.dumps(backup_data, indent=2, ensure_ascii=False).encode("utf-8")),
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        )
+    except Exception as e:
+        flash(f"Error creating backup: {str(e)}", "danger")
+        return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/restore", methods=["POST"])
+@role_required("admin")
+def admin_restore():
+    """Restore database from backup file"""
+    try:
+        if 'backup_file' not in request.files:
+            flash("No file provided", "danger")
+            return redirect(url_for("admin_panel"))
+        
+        file = request.files['backup_file']
+        if file.filename == '':
+            flash("No file selected", "danger")
+            return redirect(url_for("admin_panel"))
+        
+        data = json.loads(file.read().decode('utf-8'))
+        
+        # Restore logic would go here - for safety, this is a placeholder
+        flash("Restore functionality - implement with caution. This will overwrite existing data.", "warning")
+        return redirect(url_for("admin_panel"))
+    except Exception as e:
+        flash(f"Error restoring backup: {str(e)}", "danger")
+        return redirect(url_for("admin_panel"))
+
+
+@app.route("/api/set-language", methods=["POST"])
+def set_language():
+    """Set language preference"""
+    lang = request.json.get("lang", "ta")
+    if lang in ["ta", "en"]:
+        session["language"] = lang
+        return jsonify({"success": True, "lang": lang})
+    return jsonify({"success": False}), 400
+
+
+@app.context_processor
+def inject_language():
+    """Inject language into all templates"""
+    lang = session.get("language", "ta")
+    return dict(current_lang=lang)
 
 
 # ------------------------------------------------------------

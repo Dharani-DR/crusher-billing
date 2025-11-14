@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Messaging Settings{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <h1 class="text-2xl font-bold text-gray-800">Messaging Settings / செய்தி அமைப்புகள்</h1>
+    <a href="{{ url_for('admin_panel') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm">Back to Admin Panel</a>
+  </div>
+
+  <form method="POST" class="bg-white rounded-lg shadow-md border border-gray-200 p-6 space-y-6">
+    <!-- SMS Settings -->
+    <div class="border-b border-gray-200 pb-6">
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">SMS Settings</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS API Key</label>
+          <input type="text" name="sms_api_key" value="{{ settings.sms_api_key or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Sender ID</label>
+          <input type="text" name="sms_sender_id" value="{{ settings.sms_sender_id or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Template</label>
+          <textarea name="sms_template" rows="4" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Use variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}">{{ settings.sms_template or 'Dear {customer}, Your bill {bill_no} for ₹{amount} is ready. Date: {date}' }}</textarea>
+          <p class="text-xs text-gray-500 mt-1">Available variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}</p>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" formaction="{{ url_for('test_sms') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Send Test SMS</button>
+      </div>
+    </div>
+
+    <!-- WhatsApp Settings -->
+    <div class="border-b border-gray-200 pb-6">
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">WhatsApp Settings</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Sender Number</label>
+          <input type="text" name="whatsapp_sender_number" value="{{ settings.whatsapp_sender_number or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="+91XXXXXXXXXX">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Template</label>
+          <textarea name="whatsapp_template" rows="4" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Use variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}">{{ settings.whatsapp_template or 'Dear {customer}, Your bill {bill_no} for ₹{amount} is ready. Date: {date}. Download: {pdf_link}' }}</textarea>
+          <p class="text-xs text-gray-500 mt-1">Available variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}</p>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" formaction="{{ url_for('test_whatsapp') }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Send Test WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="flex justify-end">
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg">Save Settings</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

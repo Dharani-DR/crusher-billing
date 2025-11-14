@@ -36,6 +36,40 @@
         <label class="block text-sm font-semibold text-gray-700 mb-2">Date <span class="text-red-500">*</span></label>
         <input type="date" name="date" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
       </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Delivery Location / விநியோக இடம்</label>
+        <input type="text" name="delivery_location" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+    </div>
+
+    <!-- Waybill Section -->
+    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+      <div class="flex items-center mb-4">
+        <input type="checkbox" name="generate_waybill" id="generate_waybill" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+        <label for="generate_waybill" class="ml-2 text-sm font-semibold text-gray-700">Generate Waybill with Invoice / வேய்பில் உருவாக்க</label>
+      </div>
+      <div id="waybillFields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Driver Name / ஓட்டுநர் பெயர்</label>
+          <input type="text" name="driver_name" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Material Type / பொருள் வகை</label>
+          <input type="text" name="material_type" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Loading Time / ஏற்ற நேரம்</label>
+          <input type="datetime-local" name="loading_time" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Unloading Time / இறக்கும் நேரம்</label>
+          <input type="datetime-local" name="unloading_time" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Vehicle Capacity / வாகன திறன் (Optional)</label>
+          <input type="text" name="vehicle_capacity" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="e.g., 10 tons">
+        </div>
+      </div>
     </div>
 
     <!-- Items Section -->
@@ -328,6 +362,16 @@ document.addEventListener('click', function(e) {
 
 // Initial calculation
 calculateTotals();
+
+// Waybill toggle
+document.getElementById('generate_waybill').addEventListener('change', function() {
+  const waybillFields = document.getElementById('waybillFields');
+  if (this.checked) {
+    waybillFields.classList.remove('hidden');
+  } else {
+    waybillFields.classList.add('hidden');
+  }
+});
 </script>
 {% endblock %}
 

@@ -28,6 +28,18 @@
         font-family: 'Noto Sans Tamil', 'NotoSansTamil', 'Poppins', sans-serif;
         background-color: #f3f4f6;
         min-height: 100vh;
+        overflow-x: hidden;
+      }
+      
+      /* Fix scroll overflow */
+      body {
+        height: auto;
+        overflow-y: auto;
+      }
+      
+      main {
+        min-height: calc(100vh - 80px);
+        padding-bottom: 2rem;
       }
       
       /* Mobile responsive improvements */
@@ -65,6 +77,12 @@
   </head>
   <body>
     {% if current_user.is_authenticated %}
+    <!-- Language Switcher -->
+    <div class="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-md p-2 flex gap-2">
+      <button onclick="setLanguage('ta')" class="px-3 py-1 text-sm rounded {% if session.get('language', 'ta') == 'ta' %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-700{% endif %}">தமிழ்</button>
+      <button onclick="setLanguage('en')" class="px-3 py-1 text-sm rounded {% if session.get('language', 'ta') == 'en' %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-700{% endif %}">English</button>
+    </div>
+    
     <!-- Navigation Bar -->
     <nav class="bg-white shadow-md sticky top-0 z-50">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -167,6 +185,17 @@
       {% block content %}{% endblock %}
     </main>
 
+    <script>
+    function setLanguage(lang) {
+      fetch('{{ url_for("set_language") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({lang: lang})
+      }).then(() => {
+        location.reload();
+      });
+    }
+    </script>
     {% block extra_js %}{% endblock %}
   </body>
 </html>
