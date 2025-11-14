@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('dashboard') }}" class="text-blue-600 hover:text-blue-800">← Back</a>
+    <h1 class="text-2xl font-bold text-gray-800">Search Results for "{{ query }}"</h1>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Bill No</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Customer</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Vehicle</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+            <th class="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
+            <th class="px-6 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for invoice in invoices %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 font-semibold">{{ invoice.bill_no }}</td>
+            <td class="px-6 py-4">{{ invoice.customer.name }}</td>
+            <td class="px-6 py-4 uppercase">{{ invoice.vehicle.vehicle_number if invoice.vehicle else 'N/A' }}</td>
+            <td class="px-6 py-4">{{ invoice.date.strftime('%d-%m-%Y') }}</td>
+            <td class="px-6 py-4 text-right font-semibold">₹{{ "%.2f"|format(invoice.grand_total) }}</td>
+            <td class="px-6 py-4 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">View</a>
+                <a href="{{ url_for('invoice_pdf', invoice_id=invoice.id) }}" class="text-green-600 hover:text-green-800 text-sm">PDF</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-500">No results found</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

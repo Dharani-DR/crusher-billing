@@ -1,67 +1,70 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - Admin{% endblock %}
+{% block title %}Settings / அமைப்புகள்{% endblock %}
 
 {% block content %}
-<div class="space-y-4">
-	<h2 class="text-2xl font-semibold flex items-center gap-2"><i class="bi bi-sliders"></i> Admin Settings</h2>
-	<div class="glass p-4">
-		<form method="POST" action="{{ url_for('admin_settings_company') }}" class="space-y-4" enctype="multipart/form-data">
-			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Crusher Details</h6>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-				<div>
-					<label class="block text-sm mb-1">நிறுவன பெயர் (Company Name - Tamil)</label>
-					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="company_name_tamil" rows="2" required>{{ company_settings.company_name_tamil or '' }}</textarea>
-				</div>
-				<div>
-					<label class="block text-sm mb-1">Company Name (English)</label>
-					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="company_name_english" value="{{ company_settings.company_name_english or '' }}">
-				</div>
-			</div>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-				<div>
-					<label class="block text-sm mb-1">முகவரி (Address - Tamil)</label>
-					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="address_tamil" rows="3" required>{{ company_settings.address_tamil or '' }}</textarea>
-				</div>
-				<div>
-					<label class="block text-sm mb-1">Address (English)</label>
-					<textarea class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="address_english" rows="3">{{ company_settings.address_english or '' }}</textarea>
-				</div>
-			</div>
+<div class="max-w-4xl mx-auto space-y-6">
+  <h1 class="text-2xl font-bold text-gray-800">Settings / அமைப்புகள்</h1>
 
-			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Branding</h6>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-				<div class="md:col-span-2">
-					<label class="block text-sm mb-1">Logo (PNG/WebP)</label>
-					<input type="file" accept=".png,.webp,image/png,image/webp" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2">
-					<div class="text-xs text-slate-300 mt-1">Upload `static/img/logo.png` via deployment or file manager for production.</div>
-				</div>
-				<div class="flex items-center gap-3">
-					<img id="logoPreview" src="{{ url_for('static', filename='img/logo.png') }}" class="h-16 w-16 object-contain rounded-md border border-white/10" alt="Logo">
-					<div class="text-xs">Preview</div>
-				</div>
-			</div>
+  <form method="POST" class="bg-white rounded-lg shadow-md border border-gray-200 p-6 space-y-6">
+    <!-- Company Information -->
+    <div>
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">Company Information</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Company Name (Tamil)</label>
+          <textarea name="company_name_tamil" rows="2" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">{{ settings.company_name_tamil }}</textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Company Name (English)</label>
+          <input type="text" name="company_name_english" value="{{ settings.company_name_english }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Address (Tamil)</label>
+          <textarea name="address_tamil" rows="3" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">{{ settings.address_tamil }}</textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Address (English)</label>
+          <textarea name="address_english" rows="3" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">{{ settings.address_english }}</textarea>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">GSTIN</label>
+            <input type="text" name="gstin" value="{{ settings.gstin }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Phone Numbers</label>
+            <input type="text" name="phone_numbers" value="{{ settings.phone_numbers }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+      </div>
+    </div>
 
-			<h6 class="text-slate-300 uppercase tracking-wide text-xs">Tax Settings</h6>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-				<div>
-					<label class="block text-sm mb-1">GSTIN</label>
-					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="gstin" value="{{ company_settings.gstin or '' }}" required>
-				</div>
-				<div>
-					<label class="block text-sm mb-1">Phone Numbers (comma-separated)</label>
-					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="phone_numbers" value="{{ company_settings.phone_numbers or '' }}" required>
-				</div>
-				<div>
-					<label class="block text-sm mb-1">Footer Message</label>
-					<input type="text" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2" name="footer_message" value="{{ company_settings.footer_message or '' }}">
-				</div>
-			</div>
+    <!-- Tax Settings -->
+    <div>
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">Tax Settings</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">CGST %</label>
+          <input type="number" step="0.1" name="cgst_percent" value="{{ settings.cgst_percent }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SGST %</label>
+          <input type="number" step="0.1" name="sgst_percent" value="{{ settings.sgst_percent }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">From Location</label>
+          <input type="text" name="from_location" value="{{ settings.from_location }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+    </div>
 
-			<div class="text-right">
-				<button type="submit" class="inline-flex items-center gap-2 rounded-md bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5">Save Settings</button>
-			</div>
-		</form>
-	</div>
+    <!-- Actions -->
+    <div class="flex gap-3">
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg">Save Settings</button>
+      <a href="{{ url_for('dashboard') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-6 py-2 rounded-lg">Cancel</a>
+      <a href="{{ url_for('backup_database') }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg">Backup Database</a>
+    </div>
+  </form>
 </div>
 {% endblock %}

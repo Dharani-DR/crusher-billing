@@ -9,14 +9,18 @@ from flask_login import (
     current_user,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import desc
-from datetime import datetime
+from sqlalchemy import desc, func, and_
+from datetime import datetime, timedelta
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 import os
 import io
+import csv
+import json
 
 # ------------------------------------------------------------
 # Flask configuration
@@ -42,6 +46,7 @@ FONT_PATH = os.path.join("static", "fonts", "NotoSansTamil-Regular.ttf")
 if os.path.exists(FONT_PATH):
     try:
         pdfmetrics.registerFont(TTFont("TamilFont", FONT_PATH))
+        print("✅ Tamil font registered successfully")
     except Exception as err:
         print("⚠️ Tamil font registration failed:", err)
 else:
@@ -65,19 +70,91 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default="user")
     last_login = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
 
 
+class Customer(db.Model):
+    __tablename__ = "customers"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    gst_number = db.Column(db.String(50), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
+    address = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    invoices = db.relationship("Invoice", back_populates="customer")
+
+
+class Vehicle(db.Model):
+    __tablename__ = "vehicles"
+    id = db.Column(db.Integer, primary_key=True)
+    vehicle_number = db.Column(db.String(50), unique=True, nullable=False)
+    vehicle_type = db.Column(db.String(50), nullable=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    invoices = db.relationship("Invoice", back_populates="vehicle")
+
+
+class Item(db.Model):
+    __tablename__ = "items"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    rate = db.Column(db.Float, nullable=False, default=0.0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Invoice(db.Model):
     __tablename__ = "invoices"
     id = db.Column(db.Integer, primary_key=True)
-    customer_name = db.Column(db.String(200), nullable=False)
-    vehicle_no = db.Column(db.String(50), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    date = db.Column(db.String(50), nullable=False)
+    bill_no = db.Column(db.String(50), unique=True, nullable=False)
+    date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey("vehicles.id"), nullable=True)
+    subtotal = db.Column(db.Float, nullable=False, default=0.0)
+    cgst = db.Column(db.Float, nullable=False, default=0.0)
+    sgst = db.Column(db.Float, nullable=False, default=0.0)
+    grand_total = db.Column(db.Float, nullable=False, default=0.0)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    from_location = db.Column(db.String(100), default="நெமிலி")
+
+    customer = db.relationship("Customer", back_populates="invoices")
+    vehicle = db.relationship("Vehicle", back_populates="invoices")
+    user = db.relationship("User")
+    items = db.relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+
+
+class InvoiceItem(db.Model):
+    __tablename__ = "invoice_items"
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.id"), nullable=False)
+    item_name = db.Column(db.String(200), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    rate = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+
+    invoice = db.relationship("Invoice", back_populates="items")
+
+
+class Settings(db.Model):
+    __tablename__ = "settings"
+    id = db.Column(db.Integer, primary_key=True)
+    company_name_tamil = db.Column(db.Text, default="ஸ்ரீ தனலட்சுமி புளூ மெட்டல்ஸ்")
+    company_name_english = db.Column(db.String(200), default="Sri Dhanalakshmi Blue Metals")
+    address_tamil = db.Column(db.Text, default="நெமிலி & எண்வரடி அஞ்சல், எண்டியூர்,\nவாணூர் தாலுகா, விழுப்புரம் மாவட்டம்.")
+    address_english = db.Column(db.Text, default="Nemili & Envaradi Post, Endiyur,\nVandur Taluk, Villupuram District.")
+    gstin = db.Column(db.String(50), default="33AUXPR8335C1Z7")
+    phone_numbers = db.Column(db.String(200), default="97883 88823, 97515 31619, 75026 27223")
+    cgst_percent = db.Column(db.Float, default=2.5)
+    sgst_percent = db.Column(db.Float, default=2.5)
+    from_location = db.Column(db.String(100), default="நெமிலி")
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 @login_manager.user_loader
@@ -86,12 +163,54 @@ def load_user(user_id):
 
 
 # ------------------------------------------------------------
-# Database initialisation helpers
+# Helper functions
+# ------------------------------------------------------------
+def get_next_bill_no():
+    """Generate next bill number (0001, 0002, ...)"""
+    last_invoice = Invoice.query.order_by(desc(Invoice.id)).first()
+    if last_invoice and last_invoice.bill_no:
+        try:
+            last_num = int(last_invoice.bill_no)
+            return f"{last_num + 1:04d}"
+        except:
+            return f"{last_invoice.id + 1:04d}"
+    return "0001"
+
+
+def get_settings():
+    """Get or create default settings"""
+    settings = Settings.query.first()
+    if not settings:
+        settings = Settings()
+        db.session.add(settings)
+        db.session.commit()
+    return settings
+
+
+def admin_required(f):
+    """Decorator to require admin role"""
+    from functools import wraps
+
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if current_user.role != "admin":
+            flash("Admin access required", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# ------------------------------------------------------------
+# Database initialisation
 # ------------------------------------------------------------
 def init_db():
-    """Create tables and seed default admin if needed."""
+    """Create tables and seed default data if needed."""
     try:
         db.create_all()
+
+        # Create default admin user
         if not User.query.filter_by(username="admin").first():
             admin = User(
                 username="admin",
@@ -100,9 +219,30 @@ def init_db():
             )
             db.session.add(admin)
             db.session.commit()
+            print("✅ Default admin user created")
+
+        # Create default items
+        if Item.query.count() == 0:
+            default_items = [
+                {"name": "1½ ஜல்லி", "rate": 3000.0},
+                {"name": "¾ ஜல்லி", "rate": 3000.0},
+                {"name": "½ ஜல்லி", "rate": 3000.0},
+                {"name": "¼ ஜல்லி", "rate": 3000.0},
+                {"name": "பவுடர்", "rate": 3000.0},
+                {"name": "மிக்சிங்", "rate": 3000.0},
+            ]
+            for item_data in default_items:
+                item = Item(name=item_data["name"], rate=item_data["rate"])
+                db.session.add(item)
+            db.session.commit()
+            print("✅ Default items created")
+
+        # Create default settings
+        get_settings()
+        print("✅ Database initialized successfully")
         return True
     except Exception as err:
-        print("⚠️ DB initialisation error:", err)
+        print("⚠️ DB initialization error:", err)
         return False
 
 
@@ -112,7 +252,7 @@ def ensure_database():
 
 
 # ------------------------------------------------------------
-# Routes
+# Routes - Authentication
 # ------------------------------------------------------------
 @app.route("/")
 def index():
@@ -142,85 +282,633 @@ def login():
     return render_template("login.html")
 
 
+@app.route("/logout")
+def logout():
+    if current_user.is_authenticated:
+        logout_user()
+    flash("Logged out successfully", "info")
+    return redirect(url_for("login"))
+
+
+# ------------------------------------------------------------
+# Routes - Dashboard
+# ------------------------------------------------------------
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    invoices = Invoice.query.order_by(desc(Invoice.created_at)).all()
-    total_sales = sum(inv.amount for inv in invoices)
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Summary statistics
+    today_invoices = Invoice.query.filter(Invoice.date >= today).all()
+    today_total = sum(inv.grand_total for inv in today_invoices)
+    today_count = len(today_invoices)
+
+    monthly_invoices = Invoice.query.filter(Invoice.date >= month_start).all()
+    monthly_total = sum(inv.grand_total for inv in monthly_invoices)
+
+    customer_count = Customer.query.count()
+
+    # Recent invoices
+    recent_invoices = Invoice.query.order_by(desc(Invoice.created_at)).limit(10).all()
+
+    # Recent customers
+    recent_customers = (
+        db.session.query(Customer)
+        .join(Invoice)
+        .order_by(desc(Invoice.created_at))
+        .distinct()
+        .limit(5)
+        .all()
+    )
+
     return render_template(
         "dashboard.html",
-        invoices=invoices,
-        total_sales=total_sales,
-        user=current_user.username,
+        today_count=today_count,
+        today_total=today_total,
+        monthly_total=monthly_total,
+        customer_count=customer_count,
+        recent_invoices=recent_invoices,
+        recent_customers=recent_customers,
     )
 
 
-@app.route("/create_invoice", methods=["POST"])
+# ------------------------------------------------------------
+# Routes - Search
+# ------------------------------------------------------------
+@app.route("/search")
 @login_required
-def create_invoice():
-    try:
-        customer = request.form.get("customer_name", "").strip()
-        vehicle = request.form.get("vehicle_no", "").strip()
-        amount = float(request.form.get("amount", 0) or 0)
-        date = request.form.get("date", "").strip()
+def search():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return redirect(url_for("dashboard"))
 
-        if not customer or not vehicle or amount <= 0 or not date:
-            flash("தவறான விவரங்கள் / Invalid invoice details", "danger")
-            return redirect(url_for("dashboard"))
-
-        invoice = Invoice(
-            customer_name=customer,
-            vehicle_no=vehicle,
-            amount=amount,
-            date=date,
+    # Search invoices by customer name, vehicle, or bill number
+    invoices = (
+        Invoice.query.join(Customer)
+        .outerjoin(Vehicle)
+        .filter(
+            db.or_(
+                Customer.name.ilike(f"%{query}%"),
+                Invoice.bill_no.ilike(f"%{query}%"),
+                Vehicle.vehicle_number.ilike(f"%{query}%"),
+            )
         )
-        db.session.add(invoice)
+        .order_by(desc(Invoice.created_at))
+        .all()
+    )
+
+    return render_template("search_results.html", invoices=invoices, query=query)
+
+
+# ------------------------------------------------------------
+# Routes - Customers
+# ------------------------------------------------------------
+@app.route("/customers")
+@login_required
+def customers():
+    customers_list = Customer.query.order_by(Customer.name).all()
+    return render_template("customers.html", customers=customers_list)
+
+
+@app.route("/customers/add", methods=["POST"])
+@login_required
+def add_customer():
+    try:
+        customer = Customer(
+            name=request.form.get("name", "").strip(),
+            gst_number=request.form.get("gst_number", "").strip() or None,
+            phone=request.form.get("phone", "").strip() or None,
+            address=request.form.get("address", "").strip() or None,
+        )
+        db.session.add(customer)
         db.session.commit()
-        flash("Invoice created successfully", "success")
-    except Exception as err:
+        flash("Customer added successfully", "success")
+    except Exception as e:
         db.session.rollback()
-        flash("Failed to create invoice", "danger")
-        print("⚠️ create_invoice error:", err)
-    return redirect(url_for("dashboard"))
+        flash(f"Error adding customer: {str(e)}", "danger")
+    return redirect(url_for("customers"))
+
+
+@app.route("/customers/<int:customer_id>/edit", methods=["POST"])
+@admin_required
+def edit_customer(customer_id):
+    try:
+        customer = Customer.query.get_or_404(customer_id)
+        customer.name = request.form.get("name", "").strip()
+        customer.gst_number = request.form.get("gst_number", "").strip() or None
+        customer.phone = request.form.get("phone", "").strip() or None
+        customer.address = request.form.get("address", "").strip() or None
+        db.session.commit()
+        flash("Customer updated successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating customer: {str(e)}", "danger")
+    return redirect(url_for("customers"))
+
+
+@app.route("/customers/<int:customer_id>/delete", methods=["POST"])
+@admin_required
+def delete_customer(customer_id):
+    try:
+        customer = Customer.query.get_or_404(customer_id)
+        db.session.delete(customer)
+        db.session.commit()
+        flash("Customer deleted successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting customer: {str(e)}", "danger")
+    return redirect(url_for("customers"))
+
+
+@app.route("/customers/<int:customer_id>")
+@login_required
+def customer_detail(customer_id):
+    customer = Customer.query.get_or_404(customer_id)
+    invoices = Invoice.query.filter_by(customer_id=customer_id).order_by(desc(Invoice.created_at)).all()
+    return render_template("customer_detail.html", customer=customer, invoices=invoices)
+
+
+# ------------------------------------------------------------
+# Routes - API for autocomplete
+# ------------------------------------------------------------
+@app.route("/api/customers")
+@login_required
+def api_customers():
+    query = request.args.get("q", "").strip()
+    customers = Customer.query.filter(Customer.name.ilike(f"%{query}%")).limit(10).all()
+    return jsonify([{"id": c.id, "name": c.name, "gst_number": c.gst_number or "", "phone": c.phone or "", "address": c.address or ""} for c in customers])
+
+
+@app.route("/api/vehicles")
+@login_required
+def api_vehicles():
+    query = request.args.get("q", "").strip().upper()
+    vehicles = Vehicle.query.filter(Vehicle.vehicle_number.ilike(f"%{query}%")).limit(10).all()
+    return jsonify([{"id": v.id, "vehicle_number": v.vehicle_number, "vehicle_type": v.vehicle_type or ""} for v in vehicles])
+
+
+# ------------------------------------------------------------
+# Routes - Create Bill
+# ------------------------------------------------------------
+@app.route("/create_bill", methods=["GET", "POST"])
+@login_required
+def create_bill():
+    if request.method == "POST":
+        try:
+            # Get form data
+            customer_name = request.form.get("customer_name", "").strip()
+            vehicle_number = request.form.get("vehicle_number", "").strip().upper()
+            bill_date = request.form.get("date", datetime.now().strftime("%Y-%m-%d"))
+            
+            # Validate vehicle format
+            import re
+            if not re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$", vehicle_number):
+                flash("Invalid vehicle number format. Expected: TN32AX3344", "danger")
+                items = Item.query.filter_by(is_active=True).all()
+                return render_template("create_bill.html", items=items)
+            
+            # Get or create customer
+            customer = Customer.query.filter_by(name=customer_name).first()
+            if not customer:
+                customer = Customer(
+                    name=customer_name,
+                    gst_number=request.form.get("customer_gst", "").strip() or None,
+                    phone=request.form.get("customer_phone", "").strip() or None,
+                    address=request.form.get("customer_address", "").strip() or None,
+                )
+                db.session.add(customer)
+                db.session.flush()
+            
+            # Get or create vehicle
+            vehicle = Vehicle.query.filter_by(vehicle_number=vehicle_number).first()
+            if not vehicle:
+                vehicle = Vehicle(
+                    vehicle_number=vehicle_number,
+                    vehicle_type=request.form.get("vehicle_type", "").strip() or None,
+                    customer_id=customer.id,
+                )
+                db.session.add(vehicle)
+                db.session.flush()
+            
+            # Create invoice
+            settings = get_settings()
+            bill_no = get_next_bill_no()
+            invoice = Invoice(
+                bill_no=bill_no,
+                date=datetime.strptime(bill_date, "%Y-%m-%d"),
+                customer_id=customer.id,
+                vehicle_id=vehicle.id,
+                user_id=current_user.id,
+                from_location=settings.from_location,
+            )
+            db.session.add(invoice)
+            db.session.flush()
+            
+            # Process items
+            item_names = request.form.getlist("item_name[]")
+            quantities = request.form.getlist("quantity[]")
+            rates = request.form.getlist("rate[]")
+            
+            subtotal = 0.0
+            for i in range(len(item_names)):
+                if item_names[i] and quantities[i] and rates[i]:
+                    qty = float(quantities[i])
+                    rate = float(rates[i])
+                    amount = qty * rate
+                    subtotal += amount
+                    
+                    invoice_item = InvoiceItem(
+                        invoice_id=invoice.id,
+                        item_name=item_names[i],
+                        quantity=qty,
+                        rate=rate,
+                        amount=amount,
+                    )
+                    db.session.add(invoice_item)
+            
+            # Calculate GST
+            cgst = subtotal * (settings.cgst_percent / 100)
+            sgst = subtotal * (settings.sgst_percent / 100)
+            grand_total = subtotal + cgst + sgst
+            
+            invoice.subtotal = subtotal
+            invoice.cgst = cgst
+            invoice.sgst = sgst
+            invoice.grand_total = grand_total
+            
+            db.session.commit()
+            flash("Bill created successfully!", "success")
+            return redirect(url_for("invoice_detail", invoice_id=invoice.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating bill: {str(e)}", "danger")
+            import traceback
+            traceback.print_exc()
+    
+    items = Item.query.filter_by(is_active=True).all()
+    return render_template("create_bill.html", items=items)
+
+
+# ------------------------------------------------------------
+# Routes - Invoice Detail & PDF
+# ------------------------------------------------------------
+@app.route("/invoice/<int:invoice_id>")
+@login_required
+def invoice_detail(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    settings = get_settings()
+    return render_template("invoice_detail.html", invoice=invoice, settings=settings)
 
 
 @app.route("/invoice/<int:invoice_id>/pdf")
 @login_required
 def invoice_pdf(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
+    settings = get_settings()
+    
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-
-    if "TamilFont" in pdfmetrics.getRegisteredFontNames():
-        c.setFont("TamilFont", 14)
-    else:
-        c.setFont("Helvetica", 14)
-
-    c.drawString(60, 800, "ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ் (Sree Dhanalakshmi Blue Metals)")
-    c.drawString(60, 770, f"வாடிக்கையாளர் / Customer: {invoice.customer_name}")
-    c.drawString(60, 745, f"வாகன எண் / Vehicle: {invoice.vehicle_no}")
-    c.drawString(60, 720, f"தொகை / Amount: ₹{invoice.amount}")
-    c.drawString(60, 695, f"தேதி / Date: {invoice.date}")
-
+    
+    # Use Tamil font if available
+    font_name = "TamilFont" if "TamilFont" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+    c.setFont(font_name, 16)
+    
+    y = 800
+    # Company header
+    c.setFont(font_name, 18)
+    c.drawString(60, y, settings.company_name_tamil)
+    y -= 25
+    c.setFont("Helvetica", 14)
+    c.drawString(60, y, settings.company_name_english)
+    y -= 20
+    
+    # Address
+    c.setFont(font_name, 10)
+    for line in settings.address_tamil.split("\n"):
+        c.drawString(60, y, line)
+        y -= 15
+    
+    # GSTIN and Phone
+    c.setFont("Helvetica", 10)
+    c.drawString(60, y, f"GSTIN: {settings.gstin} | Phone: {settings.phone_numbers}")
+    y -= 30
+    
+    # Bill details
+    c.setFont(font_name, 12)
+    c.drawString(60, y, f"பில் எண் / Bill No: {invoice.bill_no}")
+    y -= 20
+    c.drawString(60, y, f"தேதி / Date: {invoice.date.strftime('%d-%m-%Y')}")
+    y -= 20
+    c.drawString(60, y, f"இடம் / From: {invoice.from_location}")
+    y -= 30
+    
+    # Customer details
+    c.drawString(60, y, f"வாடிக்கையாளர் / Customer: {invoice.customer.name}")
+    y -= 20
+    if invoice.customer.gst_number:
+        c.drawString(60, y, f"GST No: {invoice.customer.gst_number}")
+        y -= 20
+    c.drawString(60, y, f"வாகன எண் / Vehicle: {invoice.vehicle.vehicle_number if invoice.vehicle else 'N/A'}")
+    y -= 30
+    
+    # Items table header
+    c.setFont(font_name, 11)
+    c.drawString(60, y, "பொருள் / Item")
+    c.drawString(200, y, "அளவு / Qty")
+    c.drawString(280, y, "விலை / Rate")
+    c.drawString(360, y, "தொகை / Amount")
+    y -= 20
+    c.line(60, y, 500, y)
+    y -= 15
+    
+    # Items
+    c.setFont("Helvetica", 10)
+    for item in invoice.items:
+        c.drawString(60, y, item.item_name)
+        c.drawString(200, y, f"{item.quantity:.2f}")
+        c.drawString(280, y, f"₹{item.rate:.2f}")
+        c.drawString(360, y, f"₹{item.amount:.2f}")
+        y -= 20
+    
+    y -= 10
+    c.line(60, y, 500, y)
+    y -= 20
+    
+    # Totals
+    c.setFont(font_name, 11)
+    c.drawString(300, y, f"Subtotal: ₹{invoice.subtotal:.2f}")
+    y -= 20
+    c.drawString(300, y, f"CGST {settings.cgst_percent}%: ₹{invoice.cgst:.2f}")
+    y -= 20
+    c.drawString(300, y, f"SGST {settings.sgst_percent}%: ₹{invoice.sgst:.2f}")
+    y -= 20
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(300, y, f"Grand Total: ₹{invoice.grand_total:.2f}")
+    y -= 40
+    
+    # Footer
+    c.setFont(font_name, 10)
+    c.drawString(60, y, "அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்")
+    
     c.showPage()
     c.save()
     buffer.seek(0)
+    
     return send_file(
         buffer,
-        download_name=f"invoice_{invoice_id}.pdf",
+        download_name=f"invoice_{invoice.bill_no}.pdf",
         as_attachment=True,
         mimetype="application/pdf",
     )
 
 
-@app.route("/logout")
-def logout():
-    if current_user.is_authenticated:
-        logout_user()
-    flash("Logged out", "info")
-    return redirect(url_for("login"))
+@app.route("/invoice/<int:invoice_id>/duplicate", methods=["POST"])
+@login_required
+def duplicate_invoice(invoice_id):
+    try:
+        original = Invoice.query.get_or_404(invoice_id)
+        bill_no = get_next_bill_no()
+        
+        new_invoice = Invoice(
+            bill_no=bill_no,
+            date=datetime.now(),
+            customer_id=original.customer_id,
+            vehicle_id=original.vehicle_id,
+            user_id=current_user.id,
+            subtotal=original.subtotal,
+            cgst=original.cgst,
+            sgst=original.sgst,
+            grand_total=original.grand_total,
+            from_location=original.from_location,
+        )
+        db.session.add(new_invoice)
+        db.session.flush()
+        
+        for item in original.items:
+            new_item = InvoiceItem(
+                invoice_id=new_invoice.id,
+                item_name=item.item_name,
+                quantity=item.quantity,
+                rate=item.rate,
+                amount=item.amount,
+            )
+            db.session.add(new_item)
+        
+        db.session.commit()
+        flash("Invoice duplicated successfully", "success")
+        return redirect(url_for("invoice_detail", invoice_id=new_invoice.id))
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error duplicating invoice: {str(e)}", "danger")
+        return redirect(url_for("dashboard"))
 
 
+@app.route("/invoice/<int:invoice_id>/delete", methods=["POST"])
+@admin_required
+def delete_invoice(invoice_id):
+    try:
+        invoice = Invoice.query.get_or_404(invoice_id)
+        db.session.delete(invoice)
+        db.session.commit()
+        flash("Invoice deleted successfully", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting invoice: {str(e)}", "danger")
+    return redirect(url_for("dashboard"))
+
+
+# ------------------------------------------------------------
+# Routes - Reports
+# ------------------------------------------------------------
+@app.route("/reports")
+@login_required
+def reports():
+    return render_template("reports.html")
+
+
+@app.route("/reports/daily")
+@login_required
+def daily_report():
+    date_str = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    try:
+        report_date = datetime.strptime(date_str, "%Y-%m-%d")
+        start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = report_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
+        total_amount = sum(inv.grand_total for inv in invoices)
+        
+        return render_template("daily_report.html", invoices=invoices, date=report_date, total_amount=total_amount, count=len(invoices))
+    except:
+        flash("Invalid date format", "danger")
+        return redirect(url_for("reports"))
+
+
+@app.route("/reports/monthly")
+@login_required
+def monthly_report():
+    month_str = request.args.get("month", datetime.now().strftime("%Y-%m"))
+    try:
+        year, month = map(int, month_str.split("-"))
+        start = datetime(year, month, 1)
+        if month == 12:
+            end = datetime(year + 1, 1, 1) - timedelta(seconds=1)
+        else:
+            end = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        
+        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
+        
+        # Group by week
+        weekly_data = {}
+        for inv in invoices:
+            week_num = (inv.date.day - 1) // 7 + 1
+            if week_num not in weekly_data:
+                weekly_data[week_num] = []
+            weekly_data[week_num].append(inv)
+        
+        weekly_totals = {week: sum(inv.grand_total for inv in invs) for week, invs in weekly_data.items()}
+        monthly_total = sum(inv.grand_total for inv in invoices)
+        
+        return render_template("monthly_report.html", invoices=invoices, month=start, weekly_totals=weekly_totals, monthly_total=monthly_total)
+    except:
+        flash("Invalid month format", "danger")
+        return redirect(url_for("reports"))
+
+
+@app.route("/reports/customer/<int:customer_id>")
+@login_required
+def customer_report(customer_id):
+    customer = Customer.query.get_or_404(customer_id)
+    invoices = Invoice.query.filter_by(customer_id=customer_id).order_by(desc(Invoice.date)).all()
+    total = sum(inv.grand_total for inv in invoices)
+    last_visit = invoices[0].date if invoices else None
+    
+    return render_template("customer_report.html", customer=customer, invoices=invoices, total=total, last_visit=last_visit)
+
+
+@app.route("/reports/vehicle/<int:vehicle_id>")
+@login_required
+def vehicle_report(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    invoices = Invoice.query.filter_by(vehicle_id=vehicle_id).order_by(desc(Invoice.date)).all()
+    total = sum(inv.grand_total for inv in invoices)
+    
+    return render_template("vehicle_report.html", vehicle=vehicle, invoices=invoices, total=total)
+
+
+@app.route("/reports/gst")
+@login_required
+def gst_report():
+    month_str = request.args.get("month", datetime.now().strftime("%Y-%m"))
+    try:
+        year, month = map(int, month_str.split("-"))
+        start = datetime(year, month, 1)
+        if month == 12:
+            end = datetime(year + 1, 1, 1) - timedelta(seconds=1)
+        else:
+            end = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        
+        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).all()
+        total_cgst = sum(inv.cgst for inv in invoices)
+        total_sgst = sum(inv.sgst for inv in invoices)
+        total_amount = sum(inv.grand_total for inv in invoices)
+        
+        return render_template("gst_report.html", invoices=invoices, month=start, total_cgst=total_cgst, total_sgst=total_sgst, total_amount=total_amount)
+    except:
+        flash("Invalid month format", "danger")
+        return redirect(url_for("reports"))
+
+
+# ------------------------------------------------------------
+# Routes - Export Reports
+# ------------------------------------------------------------
+@app.route("/reports/daily/export")
+@login_required
+def export_daily_csv():
+    date_str = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    report_date = datetime.strptime(date_str, "%Y-%m-%d")
+    start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = report_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Bill No", "Customer", "Vehicle", "Date", "Amount"])
+    for inv in invoices:
+        writer.writerow([inv.bill_no, inv.customer.name, inv.vehicle.vehicle_number if inv.vehicle else "", inv.date.strftime("%Y-%m-%d"), inv.grand_total])
+    
+    output.seek(0)
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=f"daily_report_{date_str}.csv",
+    )
+
+
+# ------------------------------------------------------------
+# Routes - Settings
+# ------------------------------------------------------------
+@app.route("/settings", methods=["GET", "POST"])
+@admin_required
+def settings():
+    if request.method == "POST":
+        try:
+            settings_obj = get_settings()
+            settings_obj.company_name_tamil = request.form.get("company_name_tamil", "").strip()
+            settings_obj.company_name_english = request.form.get("company_name_english", "").strip()
+            settings_obj.address_tamil = request.form.get("address_tamil", "").strip()
+            settings_obj.address_english = request.form.get("address_english", "").strip()
+            settings_obj.gstin = request.form.get("gstin", "").strip()
+            settings_obj.phone_numbers = request.form.get("phone_numbers", "").strip()
+            settings_obj.cgst_percent = float(request.form.get("cgst_percent", 2.5))
+            settings_obj.sgst_percent = float(request.form.get("sgst_percent", 2.5))
+            settings_obj.from_location = request.form.get("from_location", "நெமிலி").strip()
+            settings_obj.updated_at = datetime.utcnow()
+            db.session.commit()
+            flash("Settings updated successfully", "success")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating settings: {str(e)}", "danger")
+    
+    settings_obj = get_settings()
+    return render_template("settings.html", settings=settings_obj)
+
+
+@app.route("/backup")
+@admin_required
+def backup_database():
+    """Export all data as JSON"""
+    data = {
+        "customers": [{"id": c.id, "name": c.name, "gst_number": c.gst_number, "phone": c.phone, "address": c.address} for c in Customer.query.all()],
+        "vehicles": [{"id": v.id, "vehicle_number": v.vehicle_number, "vehicle_type": v.vehicle_type} for v in Vehicle.query.all()],
+        "invoices": [
+            {
+                "id": inv.id,
+                "bill_no": inv.bill_no,
+                "date": inv.date.isoformat(),
+                "customer_id": inv.customer_id,
+                "vehicle_id": inv.vehicle_id,
+                "grand_total": inv.grand_total,
+            }
+            for inv in Invoice.query.all()
+        ],
+    }
+    
+    return send_file(
+        io.BytesIO(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")),
+        mimetype="application/json",
+        as_attachment=True,
+        download_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+    )
+
+
+# ------------------------------------------------------------
+# Routes - Health check
+# ------------------------------------------------------------
 @app.route("/ping")
 def ping():
     return jsonify({"status": "ok"})
@@ -231,7 +919,9 @@ def ping():
 # ------------------------------------------------------------
 @app.errorhandler(Exception)
 def handle_exception(err):
-    print("⚠️", err)
+    import traceback
+    print("⚠️ Error:", err)
+    traceback.print_exc()
     message = "An error occurred. Please try again." if RUNNING_ON_VERCEL else str(err)
     return render_template("error.html", error=message), 500
 
@@ -246,7 +936,6 @@ def create_app():
 
 
 app = create_app()
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

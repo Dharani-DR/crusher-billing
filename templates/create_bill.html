@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Create Bill / பில் உருவாக்கு{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <h1 class="text-2xl font-bold text-gray-800">Create Bill / பில் உருவாக்கு</h1>
+
+  <form method="POST" id="billForm" class="bg-white rounded-lg shadow-md border border-gray-200 p-6 space-y-6">
+    <!-- Customer & Vehicle Section -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">வாடிக்கையாளர் பெயர் / Customer Name <span class="text-red-500">*</span></label>
+        <input type="text" name="customer_name" id="customer_name" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" autocomplete="off">
+        <div id="customerSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-w-md max-h-48 overflow-auto hidden"></div>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">வாகன எண் / Vehicle Number <span class="text-red-500">*</span></label>
+        <input type="text" name="vehicle_number" id="vehicle_number" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" placeholder="TN32AX3344" autocomplete="off">
+        <div id="vehicleSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-w-md max-h-48 overflow-auto hidden"></div>
+        <div class="text-xs text-gray-500 mt-1">Format: TN32AX3344</div>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">GST Number</label>
+        <input type="text" name="customer_gst" id="customer_gst" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
+        <input type="text" name="customer_phone" id="customer_phone" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Address</label>
+        <textarea name="customer_address" id="customer_address" rows="2" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Date <span class="text-red-500">*</span></label>
+        <input type="date" name="date" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+    </div>
+
+    <!-- Items Section -->
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-800">Items / பொருட்கள்</h2>
+        <button type="button" onclick="addItemRow()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">+ Add Item</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Item / பொருள்</th>
+              <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Quantity / அளவு</th>
+              <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Rate / விலை</th>
+              <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Amount / தொகை</th>
+              <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700 border border-gray-200">Action</th>
+            </tr>
+          </thead>
+          <tbody id="itemsTable">
+            <tr class="item-row">
+              <td class="border border-gray-200 p-2">
+                <select name="item_name[]" class="item-select w-full border border-gray-300 rounded px-3 py-2 text-sm" onchange="updateItemRate(this)">
+                  <option value="">Select Item...</option>
+                  {% for item in items %}
+                  <option value="{{ item.name }}" data-rate="{{ item.rate }}">{{ item.name }} - ₹{{ item.rate }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="border border-gray-200 p-2">
+                <input type="number" step="0.01" min="0" name="quantity[]" class="item-qty w-full border border-gray-300 rounded px-3 py-2 text-sm" oninput="calculateRowTotal(this)" required>
+              </td>
+              <td class="border border-gray-200 p-2">
+                <input type="number" step="0.01" min="0" name="rate[]" class="item-rate w-full border border-gray-300 rounded px-3 py-2 text-sm" oninput="calculateRowTotal(this)" required>
+              </td>
+              <td class="border border-gray-200 p-2">
+                <input type="text" class="item-amount w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50" readonly value="0.00">
+              </td>
+              <td class="border border-gray-200 p-2 text-center">
+                <button type="button" onclick="removeItemRow(this)" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+      <div class="flex justify-end">
+        <div class="w-full md:w-96 space-y-2">
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-700">Subtotal:</span>
+            <span class="font-semibold" id="subtotal">₹0.00</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-700">CGST 2.5%:</span>
+            <span class="font-semibold" id="cgst">₹0.00</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-700">SGST 2.5%:</span>
+            <span class="font-semibold" id="sgst">₹0.00</span>
+          </div>
+          <div class="border-t border-gray-300 pt-2 mt-2">
+            <div class="flex justify-between text-lg font-bold">
+              <span>Grand Total:</span>
+              <span class="text-blue-600" id="grandTotal">₹0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit Buttons -->
+    <div class="flex flex-col md:flex-row gap-3">
+      <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg">Create Bill / பில் உருவாக்கு</button>
+      <a href="{{ url_for('dashboard') }}" class="flex-1 md:flex-none bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-6 py-3 rounded-lg text-center">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.addEventListener('DOMContentLoaded', function() {
+  const dateInput = document.querySelector('input[name="date"]');
+  if (dateInput && !dateInput.value) {
+    dateInput.value = new Date().toISOString().split('T')[0];
+  }
+});
+
+const items = {{ items|tojson }};
+
+function addItemRow() {
+  const tbody = document.getElementById('itemsTable');
+  const row = tbody.querySelector('.item-row').cloneNode(true);
+  row.querySelectorAll('input, select').forEach(el => {
+    el.value = '';
+    if (el.classList.contains('item-amount')) el.value = '0.00';
+  });
+  tbody.appendChild(row);
+}
+
+function removeItemRow(btn) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length > 1) {
+    btn.closest('.item-row').remove();
+    calculateTotals();
+  } else {
+    alert('At least one item is required');
+  }
+}
+
+function updateItemRate(select) {
+  const rate = parseFloat(select.options[select.selectedIndex].dataset.rate || 0);
+  const row = select.closest('.item-row');
+  row.querySelector('.item-rate').value = rate.toFixed(2);
+  calculateRowTotal(select);
+}
+
+function calculateRowTotal(input) {
+  const row = input.closest('.item-row');
+  const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+  const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
+  const amount = qty * rate;
+  row.querySelector('.item-amount').value = amount.toFixed(2);
+  calculateTotals();
+}
+
+function calculateTotals() {
+  let subtotal = 0;
+  document.querySelectorAll('.item-amount').forEach(el => {
+    subtotal += parseFloat(el.value) || 0;
+  });
+  
+  const cgst = subtotal * 0.025;
+  const sgst = subtotal * 0.025;
+  const grandTotal = subtotal + cgst + sgst;
+  
+  document.getElementById('subtotal').textContent = '₹' + subtotal.toFixed(2);
+  document.getElementById('cgst').textContent = '₹' + cgst.toFixed(2);
+  document.getElementById('sgst').textContent = '₹' + sgst.toFixed(2);
+  document.getElementById('grandTotal').textContent = '₹' + grandTotal.toFixed(2);
+}
+
+// Customer autocomplete
+document.getElementById('customer_name').addEventListener('input', function() {
+  const query = this.value.trim();
+  const suggestions = document.getElementById('customerSuggestions');
+  if (query.length < 2) {
+    suggestions.classList.add('hidden');
+    return;
+  }
+  
+  fetch(`{{ url_for('api_customers') }}?q=${encodeURIComponent(query)}`)
+    .then(r => r.json())
+    .then(data => {
+      suggestions.innerHTML = '';
+      if (data.length > 0) {
+        data.forEach(c => {
+          const div = document.createElement('div');
+          div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+          div.textContent = c.name;
+          div.onclick = () => {
+            document.getElementById('customer_name').value = c.name;
+            document.getElementById('customer_gst').value = c.gst_number || '';
+            document.getElementById('customer_phone').value = c.phone || '';
+            document.getElementById('customer_address').value = c.address || '';
+            suggestions.classList.add('hidden');
+          };
+          suggestions.appendChild(div);
+        });
+        suggestions.classList.remove('hidden');
+      } else {
+        suggestions.classList.add('hidden');
+      }
+    });
+});
+
+// Vehicle autocomplete
+document.getElementById('vehicle_number').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/\s+/g, '');
+  const query = this.value.trim();
+  const suggestions = document.getElementById('vehicleSuggestions');
+  if (query.length < 2) {
+    suggestions.classList.add('hidden');
+    return;
+  }
+  
+  fetch(`{{ url_for('api_vehicles') }}?q=${encodeURIComponent(query)}`)
+    .then(r => r.json())
+    .then(data => {
+      suggestions.innerHTML = '';
+      if (data.length > 0) {
+        data.forEach(v => {
+          const div = document.createElement('div');
+          div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+          div.textContent = v.vehicle_number + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          div.onclick = () => {
+            document.getElementById('vehicle_number').value = v.vehicle_number;
+            suggestions.classList.add('hidden');
+          };
+          suggestions.appendChild(div);
+        });
+        suggestions.classList.remove('hidden');
+      } else {
+        suggestions.classList.add('hidden');
+      }
+    });
+});
+
+// Hide suggestions on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#customer_name') && !e.target.closest('#customerSuggestions')) {
+    document.getElementById('customerSuggestions').classList.add('hidden');
+  }
+  if (!e.target.closest('#vehicle_number') && !e.target.closest('#vehicleSuggestions')) {
+    document.getElementById('vehicleSuggestions').classList.add('hidden');
+  }
+});
+
+// Initial calculation
+calculateTotals();
+</script>
+{% endblock %}
+

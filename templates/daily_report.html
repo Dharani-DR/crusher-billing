@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Report - {{ date.strftime('%d-%m-%Y') }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <h1 class="text-2xl font-bold text-gray-800">Daily Report - {{ date.strftime('%d-%m-%Y') }}</h1>
+    <div class="flex gap-2">
+      <a href="{{ url_for('export_daily_csv', date=date.strftime('%Y-%m-%d')) }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Export CSV</a>
+      <a href="{{ url_for('reports') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm">Back</a>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-blue-50 rounded-lg p-4">
+        <div class="text-sm text-gray-600">Total Invoices</div>
+        <div class="text-2xl font-bold text-blue-600">{{ count }}</div>
+      </div>
+      <div class="bg-green-50 rounded-lg p-4">
+        <div class="text-sm text-gray-600">Total Amount</div>
+        <div class="text-2xl font-bold text-green-600">₹{{ "%.2f"|format(total_amount) }}</div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Bill No</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Customer</th>
+            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700">Vehicle</th>
+            <th class="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
+            <th class="px-6 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for invoice in invoices %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 font-semibold">{{ invoice.bill_no }}</td>
+            <td class="px-6 py-4">{{ invoice.customer.name }}</td>
+            <td class="px-6 py-4 uppercase">{{ invoice.vehicle.vehicle_number if invoice.vehicle else 'N/A' }}</td>
+            <td class="px-6 py-4 text-right font-semibold">₹{{ "%.2f"|format(invoice.grand_total) }}</td>
+            <td class="px-6 py-4 text-center">
+              <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">View</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="px-6 py-8 text-center text-gray-500">No invoices found for this date</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
