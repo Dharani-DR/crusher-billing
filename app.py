@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, flash
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -21,7 +20,9 @@ import csv
 import json
 import re
 from functools import wraps
-from flask import session
+from flask import session, g
+
+from database import db, configure_database, is_database_ready
 
 # Import messaging utilities
 try:
@@ -48,15 +49,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 8 hour session timeout
 
 RUNNING_ON_VERCEL = os.getenv("VERCEL", "0") == "1"
-if RUNNING_ON_VERCEL:
-    sqlite_path = "/tmp/data.db"
-else:
-    sqlite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.db")
 
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{sqlite_path}"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-db = SQLAlchemy(app)
+configure_database(app)
 
 # ------------------------------------------------------------
 # Tamil font registration for PDF outputs
@@ -345,6 +339,8 @@ def get_user_invoices_query():
 # ------------------------------------------------------------
 def init_db():
     """Create tables and seed default data if needed."""
+    if not is_database_ready():
+        return False
     try:
         db.create_all()
         
@@ -369,7 +365,7 @@ def init_db():
                 
                 if 'status' not in columns:
                     with db.engine.connect() as conn:
-                        conn.execute(db.text('ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT "active"'))
+                        conn.execute(db.text("ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT 'active'"))
                         conn.commit()
                     print("✅ Added status column to users table")
         except Exception as e:
@@ -383,14 +379,14 @@ def init_db():
                 columns = [col['name'] for col in inspector.get_columns('settings')]
                 
                 messaging_fields = [
-                    ('sms_provider', 'VARCHAR(50) DEFAULT "twilio"'),
-                    ('sms_api_secret', 'VARCHAR(200)'),
-                    ('sms_api_url', 'VARCHAR(500)'),
-                    ('whatsapp_provider', 'VARCHAR(50) DEFAULT "twilio"'),
-                    ('whatsapp_api_key', 'VARCHAR(200)'),
-                    ('whatsapp_api_url', 'VARCHAR(500)'),
-                    ('auto_send_sms', 'BOOLEAN DEFAULT 0'),
-                    ('auto_send_whatsapp', 'BOOLEAN DEFAULT 0'),
+                    ("sms_provider", "VARCHAR(50) DEFAULT 'twilio'"),
+                    ("sms_api_secret", "VARCHAR(200)"),
+                    ("sms_api_url", "VARCHAR(500)"),
+                    ("whatsapp_provider", "VARCHAR(50) DEFAULT 'twilio'"),
+                    ("whatsapp_api_key", "VARCHAR(200)"),
+                    ("whatsapp_api_url", "VARCHAR(500)"),
+                    ("auto_send_sms", "BOOLEAN DEFAULT false"),
+                    ("auto_send_whatsapp", "BOOLEAN DEFAULT false"),
                 ]
                 
                 for field_name, field_type in messaging_fields:
@@ -446,7 +442,14 @@ def init_db():
 
 @app.before_request
 def ensure_database():
-    init_db()
+    if not is_database_ready():
+        endpoint = request.endpoint or ""
+        if endpoint in {"setup", "static"} or request.path.startswith("/static"):
+            return
+        return redirect(url_for("setup"))
+    if not getattr(g, "_db_initialized", False):
+        init_db()
+        g._db_initialized = True
 
 
 # ------------------------------------------------------------
@@ -1833,6 +1836,13 @@ def ping():
     return jsonify({"status": "ok"})
 
 
+@app.route("/setup")
+def setup():
+    """Setup instructions when DATABASE_URL is missing"""
+    database_url = os.getenv("DATABASE_URL", "")
+    return render_template("setup.html", database_url=database_url)
+
+
 # ------------------------------------------------------------
 # Error handling
 # ------------------------------------------------------------
@@ -1849,8 +1859,9 @@ def handle_exception(err):
 # App factory for Vercel
 # ------------------------------------------------------------
 def create_app():
-    with app.app_context():
-        init_db()
+    if is_database_ready():
+        with app.app_context():
+            init_db()
     return app
 
 

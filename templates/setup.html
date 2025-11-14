@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Database Setup Required</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100">
+  <div class="max-w-3xl mx-auto text-center space-y-6 py-12 px-4">
+    <h1 class="text-3xl font-bold text-gray-800">Database Setup Required</h1>
+    <p class="text-gray-600">
+      The application needs a PostgreSQL connection string before it can run.
+    </p>
+
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-left space-y-4">
+      <h2 class="text-xl font-semibold text-gray-800">Steps to get started</h2>
+      <ol class="list-decimal list-inside space-y-2 text-gray-700">
+        <li>Create a PostgreSQL database (Render, Railway, Supabase, etc.).</li>
+        <li>Copy the connection string in the format:
+          <code class="bg-gray-100 px-2 py-1 rounded text-sm">postgresql://user:password@host:5432/dbname</code>
+        </li>
+        <li>Set the <code>DATABASE_URL</code> environment variable on your deployment (or in a local <code>.env</code> file).</li>
+        <li>Restart the application – the setup screen will disappear automatically.</li>
+      </ol>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-left">
+      <p class="text-sm text-blue-900">
+        <strong>Current DATABASE_URL:</strong>
+        {% if database_url %}
+          <span class="font-mono break-all">{{ database_url }}</span>
+        {% else %}
+          <span class="italic text-blue-700">Not configured</span>
+        {% endif %}
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+
