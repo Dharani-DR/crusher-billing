@@ -60,9 +60,13 @@
               <td class="border border-gray-200 p-2">
                 <select name="item_name[]" class="item-select w-full border border-gray-300 rounded px-3 py-2 text-sm" onchange="updateItemRate(this)">
                   <option value="">Select Item...</option>
+                  {% if items %}
                   {% for item in items %}
                   <option value="{{ item.name }}" data-rate="{{ item.rate }}">{{ item.name }} - ₹{{ item.rate }}</option>
                   {% endfor %}
+                  {% else %}
+                  <option value="" disabled>No items available. Please add items in settings.</option>
+                  {% endif %}
                 </select>
               </td>
               <td class="border border-gray-200 p-2">

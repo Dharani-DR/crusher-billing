@@ -454,101 +454,135 @@ def api_vehicles():
 @app.route("/create_bill", methods=["GET", "POST"])
 @login_required
 def create_bill():
-    if request.method == "POST":
-        try:
-            # Get form data
-            customer_name = request.form.get("customer_name", "").strip()
-            vehicle_number = request.form.get("vehicle_number", "").strip().upper()
-            bill_date = request.form.get("date", datetime.now().strftime("%Y-%m-%d"))
-            
-            # Validate vehicle format
-            import re
-            if not re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$", vehicle_number):
-                flash("Invalid vehicle number format. Expected: TN32AX3344", "danger")
-                items = Item.query.filter_by(is_active=True).all()
-                return render_template("create_bill.html", items=items)
-            
-            # Get or create customer
-            customer = Customer.query.filter_by(name=customer_name).first()
-            if not customer:
-                customer = Customer(
-                    name=customer_name,
-                    gst_number=request.form.get("customer_gst", "").strip() or None,
-                    phone=request.form.get("customer_phone", "").strip() or None,
-                    address=request.form.get("customer_address", "").strip() or None,
-                )
-                db.session.add(customer)
-                db.session.flush()
-            
-            # Get or create vehicle
-            vehicle = Vehicle.query.filter_by(vehicle_number=vehicle_number).first()
-            if not vehicle:
-                vehicle = Vehicle(
-                    vehicle_number=vehicle_number,
-                    vehicle_type=request.form.get("vehicle_type", "").strip() or None,
-                    customer_id=customer.id,
-                )
-                db.session.add(vehicle)
-                db.session.flush()
-            
-            # Create invoice
-            settings = get_settings()
-            bill_no = get_next_bill_no()
-            invoice = Invoice(
-                bill_no=bill_no,
-                date=datetime.strptime(bill_date, "%Y-%m-%d"),
-                customer_id=customer.id,
-                vehicle_id=vehicle.id,
-                user_id=current_user.id,
-                from_location=settings.from_location,
-            )
-            db.session.add(invoice)
-            db.session.flush()
-            
-            # Process items
-            item_names = request.form.getlist("item_name[]")
-            quantities = request.form.getlist("quantity[]")
-            rates = request.form.getlist("rate[]")
-            
-            subtotal = 0.0
-            for i in range(len(item_names)):
-                if item_names[i] and quantities[i] and rates[i]:
-                    qty = float(quantities[i])
-                    rate = float(rates[i])
-                    amount = qty * rate
-                    subtotal += amount
-                    
-                    invoice_item = InvoiceItem(
-                        invoice_id=invoice.id,
-                        item_name=item_names[i],
-                        quantity=qty,
-                        rate=rate,
-                        amount=amount,
+    try:
+        if request.method == "POST":
+            try:
+                # Get form data
+                customer_name = request.form.get("customer_name", "").strip()
+                vehicle_number = request.form.get("vehicle_number", "").strip().upper()
+                bill_date = request.form.get("date", datetime.now().strftime("%Y-%m-%d"))
+                
+                if not customer_name:
+                    flash("Customer name is required", "danger")
+                    items = Item.query.filter_by(is_active=True).all() or []
+                    return render_template("create_bill.html", items=items)
+                
+                if not vehicle_number:
+                    flash("Vehicle number is required", "danger")
+                    items = Item.query.filter_by(is_active=True).all() or []
+                    return render_template("create_bill.html", items=items)
+                
+                # Validate vehicle format
+                import re
+                if not re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$", vehicle_number):
+                    flash("Invalid vehicle number format. Expected: TN32AX3344", "danger")
+                    items = Item.query.filter_by(is_active=True).all() or []
+                    return render_template("create_bill.html", items=items)
+                
+                # Get or create customer
+                customer = Customer.query.filter_by(name=customer_name).first()
+                if not customer:
+                    customer = Customer(
+                        name=customer_name,
+                        gst_number=request.form.get("customer_gst", "").strip() or None,
+                        phone=request.form.get("customer_phone", "").strip() or None,
+                        address=request.form.get("customer_address", "").strip() or None,
                     )
-                    db.session.add(invoice_item)
-            
-            # Calculate GST
-            cgst = subtotal * (settings.cgst_percent / 100)
-            sgst = subtotal * (settings.sgst_percent / 100)
-            grand_total = subtotal + cgst + sgst
-            
-            invoice.subtotal = subtotal
-            invoice.cgst = cgst
-            invoice.sgst = sgst
-            invoice.grand_total = grand_total
-            
-            db.session.commit()
-            flash("Bill created successfully!", "success")
-            return redirect(url_for("invoice_detail", invoice_id=invoice.id))
-            
+                    db.session.add(customer)
+                    db.session.flush()
+                
+                # Get or create vehicle
+                vehicle = Vehicle.query.filter_by(vehicle_number=vehicle_number).first()
+                if not vehicle:
+                    vehicle = Vehicle(
+                        vehicle_number=vehicle_number,
+                        vehicle_type=request.form.get("vehicle_type", "").strip() or None,
+                        customer_id=customer.id,
+                    )
+                    db.session.add(vehicle)
+                    db.session.flush()
+                
+                # Create invoice
+                settings = get_settings()
+                bill_no = get_next_bill_no()
+                invoice = Invoice(
+                    bill_no=bill_no,
+                    date=datetime.strptime(bill_date, "%Y-%m-%d"),
+                    customer_id=customer.id,
+                    vehicle_id=vehicle.id,
+                    user_id=current_user.id,
+                    from_location=settings.from_location,
+                )
+                db.session.add(invoice)
+                db.session.flush()
+                
+                # Process items
+                item_names = request.form.getlist("item_name[]")
+                quantities = request.form.getlist("quantity[]")
+                rates = request.form.getlist("rate[]")
+                
+                subtotal = 0.0
+                for i in range(len(item_names)):
+                    if item_names[i] and quantities[i] and rates[i]:
+                        try:
+                            qty = float(quantities[i])
+                            rate = float(rates[i])
+                            amount = qty * rate
+                            subtotal += amount
+                            
+                            invoice_item = InvoiceItem(
+                                invoice_id=invoice.id,
+                                item_name=item_names[i],
+                                quantity=qty,
+                                rate=rate,
+                                amount=amount,
+                            )
+                            db.session.add(invoice_item)
+                        except (ValueError, TypeError) as e:
+                            print(f"Error processing item {i}: {e}")
+                            continue
+                
+                if subtotal == 0:
+                    db.session.rollback()
+                    flash("At least one item with quantity and rate is required", "danger")
+                    items = Item.query.filter_by(is_active=True).all() or []
+                    return render_template("create_bill.html", items=items)
+                
+                # Calculate GST
+                cgst = subtotal * (settings.cgst_percent / 100)
+                sgst = subtotal * (settings.sgst_percent / 100)
+                grand_total = subtotal + cgst + sgst
+                
+                invoice.subtotal = subtotal
+                invoice.cgst = cgst
+                invoice.sgst = sgst
+                invoice.grand_total = grand_total
+                
+                db.session.commit()
+                flash("Bill created successfully!", "success")
+                return redirect(url_for("invoice_detail", invoice_id=invoice.id))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f"Error creating bill: {str(e)}", "danger")
+                import traceback
+                traceback.print_exc()
+                items = Item.query.filter_by(is_active=True).all() or []
+                return render_template("create_bill.html", items=items)
+        
+        # GET request - show form
+        try:
+            items = Item.query.filter_by(is_active=True).all()
         except Exception as e:
-            db.session.rollback()
-            flash(f"Error creating bill: {str(e)}", "danger")
-            import traceback
-            traceback.print_exc()
-    
-    items = Item.query.filter_by(is_active=True).all()
-    return render_template("create_bill.html", items=items)
+            print(f"Error fetching items: {e}")
+            items = []
+        
+        return render_template("create_bill.html", items=items)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        flash(f"Error loading create bill page: {str(e)}", "danger")
+        return redirect(url_for("dashboard"))
 
 
 # ------------------------------------------------------------
