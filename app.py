@@ -756,7 +756,7 @@ def create_bill():
                 settings = get_settings()
                 bill_no = get_next_bill_no()
                 delivery_location = request.form.get("delivery_location", "").strip() or None
-                has_waybill = request.form.get("generate_waybill") == "on"
+                has_waybill = True
                 
                 invoice = Invoice(
                     bill_no=bill_no,
@@ -772,51 +772,45 @@ def create_bill():
                 db.session.flush()
                 
                 # Create waybill if requested
-                if has_waybill:
-                    driver_name = request.form.get("driver_name", "").strip() or None
-                    if not driver_name:
-                        db.session.rollback()
-                        flash("Driver name is required when generating waybill", "danger")
-                        items = Item.query.filter_by(is_active=True).all() or []
-                        items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
-                        return render_template("create_bill.html", items=items, items_data=items_data)
-                    
-                    material_type = request.form.get("material_type", "").strip() or None
-                    vehicle_capacity = request.form.get("vehicle_capacity", "").strip() or None
-                    
-                    # Calculate loading and unloading times
-                    # Loading time = current time
-                    loading_time = datetime.now()
-                    
-                    # Unloading time = loading time + duration
-                    delivery_duration = request.form.get("delivery_duration", "").strip()
-                    duration_unit = request.form.get("duration_unit", "hours").strip()
-                    
-                    unloading_time = loading_time
-                    if delivery_duration:
-                        try:
-                            duration = float(delivery_duration)
-                            if duration_unit == "hours":
-                                unloading_time = loading_time + timedelta(hours=duration)
-                            else:  # minutes
-                                unloading_time = loading_time + timedelta(minutes=duration)
-                        except (ValueError, TypeError):
-                            # If duration is invalid, set unloading time same as loading time
-                            unloading_time = loading_time
-                    else:
-                        # Default to 2 hours if not specified
+                driver_name = request.form.get("driver_name", "").strip() or None
+                if not driver_name:
+                    db.session.rollback()
+                    flash("Driver name is required for waybill", "danger")
+                    items = Item.query.filter_by(is_active=True).all() or []
+                    items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                    return render_template("create_bill.html", items=items, items_data=items_data)
+                
+                material_type = request.form.get("material_type", "").strip() or None
+                vehicle_capacity = request.form.get("vehicle_capacity", "").strip() or None
+                
+                # Calculate loading and unloading times
+                loading_time = datetime.now()
+                delivery_duration = request.form.get("delivery_duration", "").strip()
+                duration_unit = request.form.get("duration_unit", "hours").strip()
+                
+                unloading_time = loading_time
+                if delivery_duration:
+                    try:
+                        duration = float(delivery_duration)
+                        if duration_unit == "hours":
+                            unloading_time = loading_time + timedelta(hours=duration)
+                        else:
+                            unloading_time = loading_time + timedelta(minutes=duration)
+                    except (ValueError, TypeError):
                         unloading_time = loading_time + timedelta(hours=2)
-                    
-                    waybill = Waybill(
-                        invoice_id=invoice.id,
-                        driver_name=driver_name,
-                        loading_time=loading_time,
-                        unloading_time=unloading_time,
-                        material_type=material_type,
-                        vehicle_capacity=vehicle_capacity,
-                        delivery_location=delivery_location,
-                    )
-                    db.session.add(waybill)
+                else:
+                    unloading_time = loading_time + timedelta(hours=2)
+                
+                waybill = Waybill(
+                    invoice_id=invoice.id,
+                    driver_name=driver_name,
+                    loading_time=loading_time,
+                    unloading_time=unloading_time,
+                    material_type=material_type,
+                    vehicle_capacity=vehicle_capacity,
+                    delivery_location=delivery_location,
+                )
+                db.session.add(waybill)
                 
                 # Process items
                 item_names = request.form.getlist("item_name[]")
