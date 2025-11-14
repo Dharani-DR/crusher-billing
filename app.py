@@ -23,6 +23,20 @@ import re
 from functools import wraps
 from flask import session
 
+# Import messaging utilities
+try:
+    from utils.messaging import send_sms, send_whatsapp, send_invoice_notification, format_template
+except ImportError:
+    print("⚠️ Messaging utilities not found. SMS/WhatsApp features will be limited.")
+    def send_sms(*args, **kwargs):
+        return {"success": False, "error": "Messaging module not available"}
+    def send_whatsapp(*args, **kwargs):
+        return {"success": False, "error": "Messaging module not available"}
+    def send_invoice_notification(*args, **kwargs):
+        return {"sms": {"success": False}, "whatsapp": {"success": False}}
+    def format_template(*args, **kwargs):
+        return ""
+
 # ------------------------------------------------------------
 # Flask configuration
 # ------------------------------------------------------------
@@ -186,11 +200,19 @@ class Settings(db.Model):
     sgst_percent = db.Column(db.Float, default=2.5)
     from_location = db.Column(db.String(100), default="நெமிலி")
     # Messaging settings
+    sms_provider = db.Column(db.String(50), default="twilio")  # twilio, msg91, generic
     sms_api_key = db.Column(db.String(200), nullable=True)
+    sms_api_secret = db.Column(db.String(200), nullable=True)  # For Twilio Auth Token
     sms_sender_id = db.Column(db.String(50), nullable=True)
-    whatsapp_sender_number = db.Column(db.String(20), nullable=True)
+    sms_api_url = db.Column(db.String(500), nullable=True)  # For generic provider
     sms_template = db.Column(db.Text, nullable=True)
+    whatsapp_provider = db.Column(db.String(50), default="twilio")  # twilio, generic
+    whatsapp_sender_number = db.Column(db.String(20), nullable=True)
+    whatsapp_api_key = db.Column(db.String(200), nullable=True)  # For generic provider
+    whatsapp_api_url = db.Column(db.String(500), nullable=True)  # For generic provider
     whatsapp_template = db.Column(db.Text, nullable=True)
+    auto_send_sms = db.Column(db.Boolean, default=False)  # Auto-send SMS after invoice creation
+    auto_send_whatsapp = db.Column(db.Boolean, default=False)  # Auto-send WhatsApp after invoice creation
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -352,6 +374,33 @@ def init_db():
                     print("✅ Added status column to users table")
         except Exception as e:
             print(f"⚠️ Migration note: {e}")
+        
+        # Auto-migrate: Add messaging columns to settings table
+        try:
+            from sqlalchemy import inspect as sql_inspect
+            inspector = sql_inspect(db.engine)
+            if inspector.has_table('settings'):
+                columns = [col['name'] for col in inspector.get_columns('settings')]
+                
+                messaging_fields = [
+                    ('sms_provider', 'VARCHAR(50) DEFAULT "twilio"'),
+                    ('sms_api_secret', 'VARCHAR(200)'),
+                    ('sms_api_url', 'VARCHAR(500)'),
+                    ('whatsapp_provider', 'VARCHAR(50) DEFAULT "twilio"'),
+                    ('whatsapp_api_key', 'VARCHAR(200)'),
+                    ('whatsapp_api_url', 'VARCHAR(500)'),
+                    ('auto_send_sms', 'BOOLEAN DEFAULT 0'),
+                    ('auto_send_whatsapp', 'BOOLEAN DEFAULT 0'),
+                ]
+                
+                for field_name, field_type in messaging_fields:
+                    if field_name not in columns:
+                        with db.engine.connect() as conn:
+                            conn.execute(db.text(f'ALTER TABLE settings ADD COLUMN {field_name} {field_type}'))
+                            conn.commit()
+                        print(f"✅ Added {field_name} column to settings table")
+        except Exception as e:
+            print(f"⚠️ Settings migration note: {e}")
 
         # Create default admin user
         admin = User.query.filter_by(username="admin").first()
@@ -722,23 +771,38 @@ def create_bill():
                 # Create waybill if requested
                 if has_waybill:
                     driver_name = request.form.get("driver_name", "").strip() or None
-                    loading_time_str = request.form.get("loading_time", "").strip()
-                    unloading_time_str = request.form.get("unloading_time", "").strip()
+                    if not driver_name:
+                        db.session.rollback()
+                        flash("Driver name is required when generating waybill", "danger")
+                        items = Item.query.filter_by(is_active=True).all() or []
+                        items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
+                        return render_template("create_bill.html", items=items, items_data=items_data)
+                    
                     material_type = request.form.get("material_type", "").strip() or None
                     vehicle_capacity = request.form.get("vehicle_capacity", "").strip() or None
                     
-                    loading_time = None
-                    unloading_time = None
-                    if loading_time_str:
+                    # Calculate loading and unloading times
+                    # Loading time = current time
+                    loading_time = datetime.now()
+                    
+                    # Unloading time = loading time + duration
+                    delivery_duration = request.form.get("delivery_duration", "").strip()
+                    duration_unit = request.form.get("duration_unit", "hours").strip()
+                    
+                    unloading_time = loading_time
+                    if delivery_duration:
                         try:
-                            loading_time = datetime.strptime(loading_time_str, "%Y-%m-%dT%H:%M")
-                        except:
-                            pass
-                    if unloading_time_str:
-                        try:
-                            unloading_time = datetime.strptime(unloading_time_str, "%Y-%m-%dT%H:%M")
-                        except:
-                            pass
+                            duration = float(delivery_duration)
+                            if duration_unit == "hours":
+                                unloading_time = loading_time + timedelta(hours=duration)
+                            else:  # minutes
+                                unloading_time = loading_time + timedelta(minutes=duration)
+                        except (ValueError, TypeError):
+                            # If duration is invalid, set unloading time same as loading time
+                            unloading_time = loading_time
+                    else:
+                        # Default to 2 hours if not specified
+                        unloading_time = loading_time + timedelta(hours=2)
                     
                     waybill = Waybill(
                         invoice_id=invoice.id,
@@ -796,7 +860,26 @@ def create_bill():
                 
                 db.session.commit()
                 log_audit("create_bill", "invoice", invoice.id, f"Bill {invoice.bill_no} created", request.remote_addr)
-                flash("Bill created successfully!", "success")
+                
+                # Auto-send SMS/WhatsApp notifications if enabled
+                try:
+                    settings_obj = get_settings()
+                    if settings_obj.auto_send_sms or settings_obj.auto_send_whatsapp:
+                        base_url = request.url_root.rstrip('/')
+                        notification_results = send_invoice_notification(settings_obj, invoice, base_url)
+                        
+                        if settings_obj.auto_send_sms and notification_results.get("sms", {}).get("success"):
+                            flash("Bill created and SMS sent successfully!", "success")
+                        elif settings_obj.auto_send_whatsapp and notification_results.get("whatsapp", {}).get("success"):
+                            flash("Bill created and WhatsApp sent successfully!", "success")
+                        else:
+                            flash("Bill created successfully!", "success")
+                    else:
+                        flash("Bill created successfully!", "success")
+                except Exception as e:
+                    print(f"⚠️ Error sending notifications: {e}")
+                    flash("Bill created successfully! (Notification sending failed)", "success")
+                
                 return redirect(url_for("invoice_detail", invoice_id=invoice.id))
                 
             except Exception as e:
@@ -938,24 +1021,40 @@ def invoice_pdf(invoice_id):
     # Waybill information if exists
     if invoice.has_waybill and invoice.waybill:
         y -= 20
-        c.setFont(font_name, 11)
+        c.line(60, y, 500, y)
+        y -= 20
+        c.setFont(font_name, 12)
         c.drawString(60, y, "வேய்பில் தகவல் / Waybill Information:")
         y -= 20
         c.setFont("Helvetica", 10)
         if invoice.waybill.driver_name:
-            c.drawString(60, y, f"Driver Name: {invoice.waybill.driver_name}")
+            c.drawString(60, y, f"Driver Name / ஓட்டுநர் பெயர்: {invoice.waybill.driver_name}")
             y -= 15
         if invoice.waybill.material_type:
-            c.drawString(60, y, f"Material Type: {invoice.waybill.material_type}")
+            c.drawString(60, y, f"Material Type / பொருள் வகை: {invoice.waybill.material_type}")
             y -= 15
         if invoice.waybill.loading_time:
-            c.drawString(60, y, f"Loading Time: {invoice.waybill.loading_time.strftime('%d-%m-%Y %H:%M')}")
+            c.drawString(60, y, f"Loading Time / ஏற்ற நேரம்: {invoice.waybill.loading_time.strftime('%d-%m-%Y %H:%M')}")
             y -= 15
         if invoice.waybill.unloading_time:
-            c.drawString(60, y, f"Unloading Time: {invoice.waybill.unloading_time.strftime('%d-%m-%Y %H:%M')}")
+            c.drawString(60, y, f"Unloading Time / இறக்கும் நேரம்: {invoice.waybill.unloading_time.strftime('%d-%m-%Y %H:%M')}")
             y -= 15
+            # Calculate and display duration
+            if invoice.waybill.loading_time:
+                duration = invoice.waybill.unloading_time - invoice.waybill.loading_time
+                hours = duration.total_seconds() / 3600
+                if hours >= 1:
+                    duration_str = f"{hours:.1f} hours"
+                else:
+                    minutes = duration.total_seconds() / 60
+                    duration_str = f"{minutes:.0f} minutes"
+                c.drawString(60, y, f"Duration / காலம்: {duration_str}")
+                y -= 15
         if invoice.waybill.vehicle_capacity:
-            c.drawString(60, y, f"Vehicle Capacity: {invoice.waybill.vehicle_capacity}")
+            c.drawString(60, y, f"Vehicle Capacity / வாகன திறன்: {invoice.waybill.vehicle_capacity}")
+            y -= 15
+        if invoice.waybill.delivery_location:
+            c.drawString(60, y, f"Delivery Location / விநியோக இடம்: {invoice.waybill.delivery_location}")
             y -= 15
         y -= 10
     
@@ -1528,11 +1627,23 @@ def admin_messaging():
     if request.method == "POST":
         try:
             settings = get_settings()
+            # SMS Settings
+            settings.sms_provider = request.form.get("sms_provider", "twilio").strip()
             settings.sms_api_key = request.form.get("sms_api_key", "").strip() or None
+            settings.sms_api_secret = request.form.get("sms_api_secret", "").strip() or None
             settings.sms_sender_id = request.form.get("sms_sender_id", "").strip() or None
-            settings.whatsapp_sender_number = request.form.get("whatsapp_sender_number", "").strip() or None
+            settings.sms_api_url = request.form.get("sms_api_url", "").strip() or None
             settings.sms_template = request.form.get("sms_template", "").strip() or None
+            settings.auto_send_sms = request.form.get("auto_send_sms") == "on"
+            
+            # WhatsApp Settings
+            settings.whatsapp_provider = request.form.get("whatsapp_provider", "twilio").strip()
+            settings.whatsapp_sender_number = request.form.get("whatsapp_sender_number", "").strip() or None
+            settings.whatsapp_api_key = request.form.get("whatsapp_api_key", "").strip() or None
+            settings.whatsapp_api_url = request.form.get("whatsapp_api_url", "").strip() or None
             settings.whatsapp_template = request.form.get("whatsapp_template", "").strip() or None
+            settings.auto_send_whatsapp = request.form.get("auto_send_whatsapp") == "on"
+            
             db.session.commit()
             flash("Messaging settings updated successfully", "success")
         except Exception as e:
@@ -1546,16 +1657,82 @@ def admin_messaging():
 @app.route("/admin/messaging/test-sms", methods=["POST"])
 @role_required("admin")
 def test_sms():
-    # Placeholder for SMS testing - integrate with actual SMS API
-    flash("SMS test functionality - integrate with SMS API provider", "info")
+    """Send test SMS"""
+    try:
+        settings = get_settings()
+        test_number = request.form.get("test_number", "").strip()
+        
+        if not test_number:
+            flash("Please provide a test phone number", "danger")
+            return redirect(url_for("admin_messaging"))
+        
+        if not settings.sms_api_key:
+            flash("SMS API key not configured", "danger")
+            return redirect(url_for("admin_messaging"))
+        
+        test_message = "Test message from Crusher Billing System. SMS integration is working!"
+        if settings.sms_template:
+            test_message = format_template(
+                settings.sms_template,
+                {
+                    "customer": "Test Customer",
+                    "amount": "₹1000.00",
+                    "bill_no": "TEST001",
+                    "date": datetime.now().strftime("%d-%m-%Y"),
+                    "pdf_link": "https://example.com/invoice/TEST001/pdf"
+                }
+            )
+        
+        result = send_sms(settings, test_number, test_message)
+        
+        if result.get("success"):
+            flash(f"Test SMS sent successfully! Message ID: {result.get('message_id', 'N/A')}", "success")
+        else:
+            flash(f"Failed to send test SMS: {result.get('error', 'Unknown error')}", "danger")
+    except Exception as e:
+        flash(f"Error sending test SMS: {str(e)}", "danger")
+    
     return redirect(url_for("admin_messaging"))
 
 
 @app.route("/admin/messaging/test-whatsapp", methods=["POST"])
 @role_required("admin")
 def test_whatsapp():
-    # Placeholder for WhatsApp testing - integrate with WhatsApp API
-    flash("WhatsApp test functionality - integrate with WhatsApp API provider", "info")
+    """Send test WhatsApp message"""
+    try:
+        settings = get_settings()
+        test_number = request.form.get("test_number", "").strip()
+        
+        if not test_number:
+            flash("Please provide a test phone number", "danger")
+            return redirect(url_for("admin_messaging"))
+        
+        if not settings.whatsapp_sender_number:
+            flash("WhatsApp sender number not configured", "danger")
+            return redirect(url_for("admin_messaging"))
+        
+        test_message = "Test message from Crusher Billing System. WhatsApp integration is working!"
+        if settings.whatsapp_template:
+            test_message = format_template(
+                settings.whatsapp_template,
+                {
+                    "customer": "Test Customer",
+                    "amount": "₹1000.00",
+                    "bill_no": "TEST001",
+                    "date": datetime.now().strftime("%d-%m-%Y"),
+                    "pdf_link": "https://example.com/invoice/TEST001/pdf"
+                }
+            )
+        
+        result = send_whatsapp(settings, test_number, test_message)
+        
+        if result.get("success"):
+            flash(f"Test WhatsApp sent successfully! Message ID: {result.get('message_id', 'N/A')}", "success")
+        else:
+            flash(f"Failed to send test WhatsApp: {result.get('error', 'Unknown error')}", "danger")
+    except Exception as e:
+        flash(f"Error sending test WhatsApp: {str(e)}", "danger")
+    
     return redirect(url_for("admin_messaging"))
 
 

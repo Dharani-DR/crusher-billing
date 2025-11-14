@@ -58,23 +58,58 @@
 
     <!-- Waybill Information -->
     {% if invoice.has_waybill and invoice.waybill %}
-    <div class="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200">
-      <h3 class="font-semibold text-gray-800 mb-3">Waybill Information / வேய்பில் தகவல்</h3>
+    <div class="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200 print:border-gray-300 print:bg-gray-50">
+      <h3 class="font-semibold text-gray-800 mb-3 text-lg">Waybill Information / வேய்பில் தகவல்</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         {% if invoice.waybill.driver_name %}
-        <div><span class="text-gray-600">Driver Name:</span> <span class="font-semibold">{{ invoice.waybill.driver_name }}</span></div>
+        <div>
+          <span class="text-gray-600 font-semibold">Driver Name / ஓட்டுநர் பெயர்:</span> 
+          <span class="font-bold text-gray-800">{{ invoice.waybill.driver_name }}</span>
+        </div>
         {% endif %}
         {% if invoice.waybill.material_type %}
-        <div><span class="text-gray-600">Material Type:</span> {{ invoice.waybill.material_type }}</div>
+        <div>
+          <span class="text-gray-600 font-semibold">Material Type / பொருள் வகை:</span> 
+          <span class="text-gray-800">{{ invoice.waybill.material_type }}</span>
+        </div>
         {% endif %}
         {% if invoice.waybill.loading_time %}
-        <div><span class="text-gray-600">Loading Time:</span> {{ invoice.waybill.loading_time.strftime('%d-%m-%Y %H:%M') }}</div>
+        <div>
+          <span class="text-gray-600 font-semibold">Loading Time / ஏற்ற நேரம்:</span> 
+          <span class="text-gray-800">{{ invoice.waybill.loading_time.strftime('%d-%m-%Y %H:%M') }}</span>
+        </div>
         {% endif %}
         {% if invoice.waybill.unloading_time %}
-        <div><span class="text-gray-600">Unloading Time:</span> {{ invoice.waybill.unloading_time.strftime('%d-%m-%Y %H:%M') }}</div>
+        <div>
+          <span class="text-gray-600 font-semibold">Unloading Time / இறக்கும் நேரம்:</span> 
+          <span class="text-gray-800">{{ invoice.waybill.unloading_time.strftime('%d-%m-%Y %H:%M') }}</span>
+        </div>
         {% endif %}
         {% if invoice.waybill.vehicle_capacity %}
-        <div><span class="text-gray-600">Vehicle Capacity:</span> {{ invoice.waybill.vehicle_capacity }}</div>
+        <div>
+          <span class="text-gray-600 font-semibold">Vehicle Capacity / வாகன திறன்:</span> 
+          <span class="text-gray-800">{{ invoice.waybill.vehicle_capacity }}</span>
+        </div>
+        {% endif %}
+        {% if invoice.waybill.delivery_location %}
+        <div>
+          <span class="text-gray-600 font-semibold">Delivery Location / விநியோக இடம்:</span> 
+          <span class="text-gray-800">{{ invoice.waybill.delivery_location }}</span>
+        </div>
+        {% endif %}
+        {% if invoice.waybill.loading_time and invoice.waybill.unloading_time %}
+        <div class="md:col-span-2">
+          <span class="text-gray-600 font-semibold">Duration / காலம்:</span> 
+          <span class="text-gray-800">
+            {% set duration = invoice.waybill.unloading_time - invoice.waybill.loading_time %}
+            {% set hours = duration.total_seconds() / 3600 %}
+            {% if hours >= 1 %}
+              {{ "%.1f"|format(hours) }} hours
+            {% else %}
+              {{ "%.0f"|format(duration.total_seconds() / 60) }} minutes
+            {% endif %}
+          </span>
+        </div>
         {% endif %}
       </div>
     </div>

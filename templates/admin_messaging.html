@@ -15,20 +15,43 @@
       <h2 class="text-lg font-semibold text-gray-800 mb-4">SMS Settings</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS API Key</label>
-          <input type="text" name="sms_api_key" value="{{ settings.sms_api_key or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Provider</label>
+          <select name="sms_provider" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+            <option value="twilio" {% if (settings.sms_provider or 'twilio') == 'twilio' %}selected{% endif %}>Twilio</option>
+            <option value="msg91" {% if settings.sms_provider == 'msg91' %}selected{% endif %}>MSG91</option>
+            <option value="generic" {% if settings.sms_provider == 'generic' %}selected{% endif %}>Generic HTTP API</option>
+          </select>
         </div>
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Sender ID</label>
-          <input type="text" name="sms_sender_id" value="{{ settings.sms_sender_id or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS API Key / Account SID</label>
+          <input type="text" name="sms_api_key" value="{{ settings.sms_api_key or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="For Twilio: Account SID">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS API Secret / Auth Token (Twilio)</label>
+          <input type="text" name="sms_api_secret" value="{{ settings.sms_api_secret or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="For Twilio: Auth Token">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Sender ID / From Number</label>
+          <input type="text" name="sms_sender_id" value="{{ settings.sms_sender_id or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="For Twilio: +1234567890">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">SMS API URL (Generic Provider Only)</label>
+          <input type="text" name="sms_api_url" value="{{ settings.sms_api_url or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="https://api.example.com/send">
         </div>
         <div class="md:col-span-2">
           <label class="block text-sm font-semibold text-gray-700 mb-2">SMS Template</label>
           <textarea name="sms_template" rows="4" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Use variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}">{{ settings.sms_template or 'Dear {customer}, Your bill {bill_no} for ₹{amount} is ready. Date: {date}' }}</textarea>
           <p class="text-xs text-gray-500 mt-1">Available variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}</p>
         </div>
+        <div class="md:col-span-2">
+          <label class="flex items-center">
+            <input type="checkbox" name="auto_send_sms" {% if settings.auto_send_sms %}checked{% endif %} class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+            <span class="ml-2 text-sm text-gray-700">Auto-send SMS after invoice creation</span>
+          </label>
+        </div>
       </div>
-      <div class="mt-4">
+      <div class="mt-4 flex gap-4">
+        <input type="text" name="test_number" placeholder="Test phone number (+91XXXXXXXXXX)" class="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" style="max-width: 250px;">
         <button type="submit" formaction="{{ url_for('test_sms') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Send Test SMS</button>
       </div>
     </div>
@@ -38,16 +61,38 @@
       <h2 class="text-lg font-semibold text-gray-800 mb-4">WhatsApp Settings</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Provider</label>
+          <select name="whatsapp_provider" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+            <option value="twilio" {% if (settings.whatsapp_provider or 'twilio') == 'twilio' %}selected{% endif %}>Twilio</option>
+            <option value="generic" {% if settings.whatsapp_provider == 'generic' %}selected{% endif %}>Generic HTTP API</option>
+          </select>
+        </div>
+        <div>
           <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Sender Number</label>
-          <input type="text" name="whatsapp_sender_number" value="{{ settings.whatsapp_sender_number or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="+91XXXXXXXXXX">
+          <input type="text" name="whatsapp_sender_number" value="{{ settings.whatsapp_sender_number or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="+91XXXXXXXXXX or whatsapp:+91XXXXXXXXXX">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp API Key (Generic Provider Only)</label>
+          <input type="text" name="whatsapp_api_key" value="{{ settings.whatsapp_api_key or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp API URL (Generic Provider Only)</label>
+          <input type="text" name="whatsapp_api_url" value="{{ settings.whatsapp_api_url or '' }}" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="https://api.example.com/whatsapp/send">
         </div>
         <div class="md:col-span-2">
           <label class="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Template</label>
           <textarea name="whatsapp_template" rows="4" class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" placeholder="Use variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}">{{ settings.whatsapp_template or 'Dear {customer}, Your bill {bill_no} for ₹{amount} is ready. Date: {date}. Download: {pdf_link}' }}</textarea>
           <p class="text-xs text-gray-500 mt-1">Available variables: {customer}, {amount}, {bill_no}, {date}, {pdf_link}</p>
         </div>
+        <div class="md:col-span-2">
+          <label class="flex items-center">
+            <input type="checkbox" name="auto_send_whatsapp" {% if settings.auto_send_whatsapp %}checked{% endif %} class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+            <span class="ml-2 text-sm text-gray-700">Auto-send WhatsApp after invoice creation</span>
+          </label>
+        </div>
       </div>
-      <div class="mt-4">
+      <div class="mt-4 flex gap-4">
+        <input type="text" name="test_number" placeholder="Test phone number (+91XXXXXXXXXX)" class="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500" style="max-width: 250px;">
         <button type="submit" formaction="{{ url_for('test_whatsapp') }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Send Test WhatsApp</button>
       </div>
     </div>
