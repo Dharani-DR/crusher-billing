@@ -4,15 +4,15 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 no-print">
     <h1 class="text-2xl font-bold text-gray-800">Invoice {{ invoice.bill_no }}</h1>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-2 no-print">
       <a href="{{ url_for('invoice_pdf', invoice_id=invoice.id) }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Download PDF</a>
       <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Print</button>
+      {% if current_user.role in ['staff', 'admin'] %}
       <form method="POST" action="{{ url_for('duplicate_invoice', invoice_id=invoice.id) }}" class="inline">
         <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Duplicate</button>
       </form>
-      {% if current_user.role == 'admin' %}
       <form method="POST" action="{{ url_for('delete_invoice', invoice_id=invoice.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to delete this invoice?');">
         <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">Delete</button>
       </form>
@@ -20,7 +20,7 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-lg shadow-md border border-gray-200 p-6 print:shadow-none">
+  <div class="bg-white rounded-lg shadow-md border border-gray-200 p-6 print:shadow-none invoice-container">
     <!-- Company Header -->
     <div class="text-center mb-6 pb-4 border-b border-gray-300">
       <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ settings.company_name_tamil }}</h2>
@@ -99,14 +99,110 @@
     <div class="text-center pt-4 border-t border-gray-300">
       <p class="text-sm text-gray-600">அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்</p>
     </div>
+
+    <!-- Signature Block -->
+    <div class="mt-8 pt-6 border-t border-gray-300 signature-block">
+      <div class="text-center">
+        <div class="mb-2" style="border-bottom: 1px solid #000; width: 300px; margin: 0 auto; padding-bottom: 5px;"></div>
+        <p class="text-sm font-semibold">Authorized Signature</p>
+      </div>
+    </div>
   </div>
 </div>
 
 <style>
+@font-face {
+  font-family: 'NotoSansTamil';
+  src: url('{{ url_for("static", filename="fonts/NotoSansTamil-Regular.ttf") }}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  font-family: 'Noto Sans Tamil', 'NotoSansTamil', 'Poppins', sans-serif;
+}
+
 @media print {
-  .no-print { display: none !important; }
-  body { background: white; }
-  .bg-white { background: white !important; }
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  body {
+    background: white !important;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Hide everything except invoice container */
+  body > *:not(.invoice-container) {
+    display: none !important;
+  }
+  
+  nav, .no-print, button, a:not(.print-link) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  .invoice-container {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    page-break-inside: avoid;
+  }
+  
+  .bg-white {
+    background: white !important;
+  }
+  
+  /* Ensure table fits on page */
+  table {
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tfoot {
+    display: table-footer-group;
+  }
+  
+  /* Signature block at bottom */
+  .signature-block {
+    margin-top: 40px;
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  /* Remove shadows and animations */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  /* Force Tamil font */
+  * {
+    font-family: 'NotoSansTamil', 'Noto Sans Tamil', 'Poppins', sans-serif !important;
+  }
 }
 </style>
 {% endblock %}

@@ -9,16 +9,16 @@
   <form method="POST" id="billForm" class="bg-white rounded-lg shadow-md border border-gray-200 p-6 space-y-6">
     <!-- Customer & Vehicle Section -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
+      <div class="relative">
         <label class="block text-sm font-semibold text-gray-700 mb-2">வாடிக்கையாளர் பெயர் / Customer Name <span class="text-red-500">*</span></label>
         <input type="text" name="customer_name" id="customer_name" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" autocomplete="off">
-        <div id="customerSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-w-md max-h-48 overflow-auto hidden"></div>
+        <div id="customerSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-h-48 overflow-auto hidden" style="top: 100%;"></div>
       </div>
-      <div>
+      <div class="relative">
         <label class="block text-sm font-semibold text-gray-700 mb-2">வாகன எண் / Vehicle Number <span class="text-red-500">*</span></label>
-        <input type="text" name="vehicle_number" id="vehicle_number" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" placeholder="TN32AX3344" autocomplete="off">
-        <div id="vehicleSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-w-md max-h-48 overflow-auto hidden"></div>
-        <div class="text-xs text-gray-500 mt-1">Format: TN32AX3344</div>
+        <input type="text" name="vehicle_number" id="vehicle_number" required class="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" placeholder="TN32AX3344" autocomplete="off" pattern="[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}" title="Format: TN32AX3344 or TN10AA9988">
+        <div id="vehicleSuggestions" class="absolute z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 w-full max-h-48 overflow-auto hidden" style="top: 100%;"></div>
+        <div class="text-xs text-gray-500 mt-1">Format: TN32AX3344 or TN10AA9988</div>
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-2">GST Number</label>
@@ -186,70 +186,134 @@ function calculateTotals() {
   document.getElementById('grandTotal').textContent = '₹' + grandTotal.toFixed(2);
 }
 
-// Customer autocomplete
+// Customer autocomplete with debouncing
+let customerTimeout;
 document.getElementById('customer_name').addEventListener('input', function() {
   const query = this.value.trim();
   const suggestions = document.getElementById('customerSuggestions');
+  
+  clearTimeout(customerTimeout);
+  
   if (query.length < 2) {
     suggestions.classList.add('hidden');
     return;
   }
   
-  fetch(`{{ url_for('api_customers') }}?q=${encodeURIComponent(query)}`)
-    .then(r => r.json())
-    .then(data => {
-      suggestions.innerHTML = '';
-      if (data.length > 0) {
-        data.forEach(c => {
-          const div = document.createElement('div');
-          div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
-          div.textContent = c.name;
-          div.onclick = () => {
-            document.getElementById('customer_name').value = c.name;
-            document.getElementById('customer_gst').value = c.gst_number || '';
-            document.getElementById('customer_phone').value = c.phone || '';
-            document.getElementById('customer_address').value = c.address || '';
-            suggestions.classList.add('hidden');
-          };
-          suggestions.appendChild(div);
-        });
-        suggestions.classList.remove('hidden');
-      } else {
+  customerTimeout = setTimeout(() => {
+    fetch(`{{ url_for('api_customers') }}?q=${encodeURIComponent(query)}`)
+      .then(r => r.json())
+      .then(data => {
+        suggestions.innerHTML = '';
+        if (data.length > 0) {
+          data.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+            div.textContent = c.name;
+            div.onclick = () => {
+              document.getElementById('customer_name').value = c.name;
+              document.getElementById('customer_gst').value = c.gst_number || '';
+              document.getElementById('customer_phone').value = c.phone || '';
+              document.getElementById('customer_address').value = c.address || '';
+              suggestions.classList.add('hidden');
+              // Load vehicles for this customer
+              loadCustomerVehicles(c.id);
+            };
+            suggestions.appendChild(div);
+          });
+          suggestions.classList.remove('hidden');
+        } else {
+          suggestions.classList.add('hidden');
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching customers:', err);
         suggestions.classList.add('hidden');
-      }
-    });
+      });
+  }, 300); // 300ms debounce
 });
 
-// Vehicle autocomplete
-document.getElementById('vehicle_number').addEventListener('input', function() {
-  this.value = this.value.toUpperCase().replace(/\s+/g, '');
-  const query = this.value.trim();
-  const suggestions = document.getElementById('vehicleSuggestions');
-  if (query.length < 2) {
-    suggestions.classList.add('hidden');
-    return;
-  }
+// Load vehicles for customer
+function loadCustomerVehicles(customerId) {
+  const vehicleInput = document.getElementById('vehicle_number');
+  const vehicleSuggestions = document.getElementById('vehicleSuggestions');
   
-  fetch(`{{ url_for('api_vehicles') }}?q=${encodeURIComponent(query)}`)
+  fetch(`{{ url_for('api_vehicles') }}?customer_id=${customerId}`)
     .then(r => r.json())
     .then(data => {
-      suggestions.innerHTML = '';
       if (data.length > 0) {
+        // Show last used vehicle first
+        vehicleSuggestions.innerHTML = '';
         data.forEach(v => {
           const div = document.createElement('div');
           div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
           div.textContent = v.vehicle_number + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
           div.onclick = () => {
-            document.getElementById('vehicle_number').value = v.vehicle_number;
-            suggestions.classList.add('hidden');
+            vehicleInput.value = v.vehicle_number;
+            vehicleSuggestions.classList.add('hidden');
           };
-          suggestions.appendChild(div);
+          vehicleSuggestions.appendChild(div);
         });
-        suggestions.classList.remove('hidden');
-      } else {
-        suggestions.classList.add('hidden');
+        // Auto-select first vehicle (last used)
+        if (data.length > 0 && !vehicleInput.value) {
+          vehicleInput.value = data[0].vehicle_number;
+        }
       }
-    });
+    })
+    .catch(err => console.error('Error loading vehicles:', err));
+}
+
+// Vehicle autocomplete with debouncing and format validation
+let vehicleTimeout;
+document.getElementById('vehicle_number').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/\s+/g, '');
+  const query = this.value.trim();
+  const suggestions = document.getElementById('vehicleSuggestions');
+  
+  clearTimeout(vehicleTimeout);
+  
+  if (query.length < 2) {
+    suggestions.classList.add('hidden');
+    return;
+  }
+  
+  vehicleTimeout = setTimeout(() => {
+    // Get customer ID if available
+    const customerName = document.getElementById('customer_name').value;
+    let url = `{{ url_for('api_vehicles') }}?q=${encodeURIComponent(query)}`;
+    
+    // Try to get customer ID from autocomplete
+    fetch(`{{ url_for('api_customers') }}?q=${encodeURIComponent(customerName)}`)
+      .then(r => r.json())
+      .then(customers => {
+        if (customers.length > 0 && customers[0].id) {
+          url += `&customer_id=${customers[0].id}`;
+        }
+        return fetch(url);
+      })
+      .then(r => r.json())
+      .then(data => {
+        suggestions.innerHTML = '';
+        if (data.length > 0) {
+          data.forEach(v => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+            div.textContent = v.vehicle_number + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+            div.onclick = () => {
+              document.getElementById('vehicle_number').value = v.vehicle_number;
+              suggestions.classList.add('hidden');
+            };
+            suggestions.appendChild(div);
+          });
+          suggestions.classList.remove('hidden');
+        } else {
+          suggestions.classList.add('hidden');
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching vehicles:', err);
+        suggestions.classList.add('hidden');
+      });
+  }, 300); // 300ms debounce
 });
 
 // Hide suggestions on outside click

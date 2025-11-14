@@ -10,6 +10,14 @@
       rel="stylesheet"
     />
     <style>
+      @font-face {
+        font-family: 'NotoSansTamil';
+        src: url('{{ url_for("static", filename="fonts/NotoSansTamil-Regular.ttf") }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+      
       * {
         box-sizing: border-box;
       }
@@ -17,8 +25,40 @@
       body {
         margin: 0;
         padding: 0;
-        font-family: 'Noto Sans Tamil', 'Poppins', sans-serif;
+        font-family: 'Noto Sans Tamil', 'NotoSansTamil', 'Poppins', sans-serif;
         background-color: #f3f4f6;
+        min-height: 100vh;
+      }
+      
+      /* Mobile responsive improvements */
+      @media (max-width: 768px) {
+        nav {
+          flex-wrap: wrap;
+        }
+        
+        nav a, nav button {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
+        }
+        
+        .max-w-7xl {
+          padding-left: 1rem;
+          padding-right: 1rem;
+        }
+        
+        table {
+          font-size: 0.875rem;
+        }
+        
+        table th, table td {
+          padding: 0.5rem;
+        }
+        
+        button, a.btn, a[class*="bg-"] {
+          min-height: 44px;
+          min-width: 44px;
+          touch-action: manipulation;
+        }
       }
     </style>
     {% block extra_css %}{% endblock %}
@@ -51,18 +91,22 @@
             >
               Dashboard
             </a>
+            {% if current_user.role in ['staff', 'admin'] %}
             <a
               href="{{ url_for('create_bill') }}"
               class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 rounded-md"
             >
               Create Bill
             </a>
+            {% endif %}
+            {% if current_user.role in ['staff', 'admin'] %}
             <a
               href="{{ url_for('customers') }}"
               class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 rounded-md"
             >
               Customers
             </a>
+            {% endif %}
             <a
               href="{{ url_for('reports') }}"
               class="px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 rounded-md"

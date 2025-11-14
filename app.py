@@ -9,14 +9,12 @@ from flask_login import (
     current_user,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import desc, func, and_
+from sqlalchemy import desc, or_
 from datetime import datetime, timedelta
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-from reportlab.lib import colors
-from reportlab.lib.units import inch
 import os
 import io
 import csv
@@ -68,9 +66,12 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(50), default="user")
+    role = db.Column(db.String(50), default="user")  # user, staff, admin
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    customer = db.relationship("Customer", foreign_keys=[customer_id])
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
@@ -202,6 +203,31 @@ def admin_required(f):
     return decorated_function
 
 
+def staff_required(f):
+    """Decorator to require staff or admin role"""
+    from functools import wraps
+
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if current_user.role not in ["staff", "admin"]:
+            flash("Staff or admin access required", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def get_user_invoices_query():
+    """Get invoice query filtered by user role"""
+    if current_user.role == "admin":
+        return Invoice.query
+    elif current_user.role == "staff":
+        return Invoice.query
+    else:  # user role - only their own invoices
+        return Invoice.query.filter_by(customer_id=current_user.customer_id)
+
+
 # ------------------------------------------------------------
 # Database initialisation
 # ------------------------------------------------------------
@@ -299,28 +325,42 @@ def dashboard():
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
+    # Get filtered invoice query based on user role
+    invoice_query = get_user_invoices_query()
+
     # Summary statistics
-    today_invoices = Invoice.query.filter(Invoice.date >= today).all()
+    today_invoices = invoice_query.filter(Invoice.date >= today).all()
     today_total = sum(inv.grand_total for inv in today_invoices)
     today_count = len(today_invoices)
 
-    monthly_invoices = Invoice.query.filter(Invoice.date >= month_start).all()
+    monthly_invoices = invoice_query.filter(Invoice.date >= month_start).all()
     monthly_total = sum(inv.grand_total for inv in monthly_invoices)
 
-    customer_count = Customer.query.count()
+    # Customer count - only for admin/staff
+    if current_user.role in ["admin", "staff"]:
+        customer_count = Customer.query.count()
+    else:
+        customer_count = 1 if current_user.customer_id else 0
 
     # Recent invoices
-    recent_invoices = Invoice.query.order_by(desc(Invoice.created_at)).limit(10).all()
+    recent_invoices = invoice_query.order_by(desc(Invoice.created_at)).limit(10).all()
 
-    # Recent customers
-    recent_customers = (
-        db.session.query(Customer)
-        .join(Invoice)
-        .order_by(desc(Invoice.created_at))
-        .distinct()
-        .limit(5)
-        .all()
-    )
+    # Recent customers - only for admin/staff
+    if current_user.role in ["admin", "staff"]:
+        recent_customers = (
+            db.session.query(Customer)
+            .join(Invoice)
+            .order_by(desc(Invoice.created_at))
+            .distinct()
+            .limit(5)
+            .all()
+        )
+    else:
+        # For user role, show only their customer
+        if current_user.customer_id:
+            recent_customers = [current_user.customer] if current_user.customer else []
+        else:
+            recent_customers = []
 
     return render_template(
         "dashboard.html",
@@ -343,9 +383,12 @@ def search():
     if not query:
         return redirect(url_for("dashboard"))
 
+    # Get filtered invoice query based on user role
+    invoice_query = get_user_invoices_query()
+
     # Search invoices by customer name, vehicle, or bill number
     invoices = (
-        Invoice.query.join(Customer)
+        invoice_query.join(Customer)
         .outerjoin(Vehicle)
         .filter(
             db.or_(
@@ -367,7 +410,14 @@ def search():
 @app.route("/customers")
 @login_required
 def customers():
-    customers_list = Customer.query.order_by(Customer.name).all()
+    if current_user.role == "user":
+        # Users can only see their own customer
+        if current_user.customer_id:
+            customers_list = [current_user.customer] if current_user.customer else []
+        else:
+            customers_list = []
+    else:
+        customers_list = Customer.query.order_by(Customer.name).all()
     return render_template("customers.html", customers=customers_list)
 
 
@@ -391,7 +441,7 @@ def add_customer():
 
 
 @app.route("/customers/<int:customer_id>/edit", methods=["POST"])
-@admin_required
+@staff_required
 def edit_customer(customer_id):
     try:
         customer = Customer.query.get_or_404(customer_id)
@@ -425,6 +475,10 @@ def delete_customer(customer_id):
 @login_required
 def customer_detail(customer_id):
     customer = Customer.query.get_or_404(customer_id)
+    # Check access - users can only see their own customer
+    if current_user.role == "user" and current_user.customer_id != customer_id:
+        flash("Access denied", "danger")
+        return redirect(url_for("dashboard"))
     invoices = Invoice.query.filter_by(customer_id=customer_id).order_by(desc(Invoice.created_at)).all()
     return render_template("customer_detail.html", customer=customer, invoices=invoices)
 
@@ -444,7 +498,20 @@ def api_customers():
 @login_required
 def api_vehicles():
     query = request.args.get("q", "").strip().upper()
-    vehicles = Vehicle.query.filter(Vehicle.vehicle_number.ilike(f"%{query}%")).limit(10).all()
+    customer_id = request.args.get("customer_id", type=int)
+    
+    # If customer_id provided, prioritize vehicles for that customer
+    if customer_id:
+        vehicles = Vehicle.query.filter(
+            Vehicle.vehicle_number.ilike(f"%{query}%"),
+            Vehicle.customer_id == customer_id
+        ).order_by(desc(Vehicle.created_at)).limit(10).all()
+        # If no matches for customer, fall back to all vehicles
+        if not vehicles:
+            vehicles = Vehicle.query.filter(Vehicle.vehicle_number.ilike(f"%{query}%")).limit(10).all()
+    else:
+        vehicles = Vehicle.query.filter(Vehicle.vehicle_number.ilike(f"%{query}%")).order_by(desc(Vehicle.created_at)).limit(10).all()
+    
     return jsonify([{"id": v.id, "vehicle_number": v.vehicle_number, "vehicle_type": v.vehicle_type or ""} for v in vehicles])
 
 
@@ -452,7 +519,7 @@ def api_vehicles():
 # Routes - Create Bill
 # ------------------------------------------------------------
 @app.route("/create_bill", methods=["GET", "POST"])
-@login_required
+@staff_required
 def create_bill():
     try:
         if request.method == "POST":
@@ -474,10 +541,11 @@ def create_bill():
                     items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
                     return render_template("create_bill.html", items=items, items_data=items_data)
                 
-                # Validate vehicle format
+                # Validate vehicle format - Allow TN32AX3344, TN10AA9988, etc.
                 import re
+                # Pattern: 2 letters, 2 digits, 1-2 letters, 4 digits
                 if not re.match(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$", vehicle_number):
-                    flash("Invalid vehicle number format. Expected: TN32AX3344", "danger")
+                    flash("Invalid vehicle number format. Expected format: TN32AX3344 or TN10AA9988", "danger")
                     items = Item.query.filter_by(is_active=True).all() or []
                     items_data = [{"id": item.id, "name": item.name, "rate": float(item.rate)} for item in items]
                     return render_template("create_bill.html", items=items, items_data=items_data)
@@ -600,6 +668,10 @@ def create_bill():
 @login_required
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
+    # Check access - users can only see their own invoices
+    if current_user.role == "user" and current_user.customer_id != invoice.customer_id:
+        flash("Access denied", "danger")
+        return redirect(url_for("dashboard"))
     settings = get_settings()
     return render_template("invoice_detail.html", invoice=invoice, settings=settings)
 
@@ -608,6 +680,10 @@ def invoice_detail(invoice_id):
 @login_required
 def invoice_pdf(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
+    # Check access - users can only see their own invoices
+    if current_user.role == "user" and current_user.customer_id != invoice.customer_id:
+        flash("Access denied", "danger")
+        return redirect(url_for("dashboard"))
     settings = get_settings()
     
     buffer = io.BytesIO()
@@ -690,9 +766,17 @@ def invoice_pdf(invoice_id):
     c.drawString(300, y, f"Grand Total: ₹{invoice.grand_total:.2f}")
     y -= 40
     
-    # Footer
+    # Footer with signature block
+    y -= 30
     c.setFont(font_name, 10)
     c.drawString(60, y, "அங்கீகரிக்கப்பட்டவர் – ஸ்ரீ தனலட்சுமி புளு மெட்டல்ஸ்")
+    y -= 40
+    
+    # Signature area
+    c.setFont("Helvetica", 10)
+    c.drawString(60, y, "__________________________")
+    y -= 15
+    c.drawString(60, y, "Authorized Signature")
     
     c.showPage()
     c.save()
@@ -707,7 +791,7 @@ def invoice_pdf(invoice_id):
 
 
 @app.route("/invoice/<int:invoice_id>/duplicate", methods=["POST"])
-@login_required
+@staff_required
 def duplicate_invoice(invoice_id):
     try:
         original = Invoice.query.get_or_404(invoice_id)
@@ -748,7 +832,7 @@ def duplicate_invoice(invoice_id):
 
 
 @app.route("/invoice/<int:invoice_id>/delete", methods=["POST"])
-@admin_required
+@staff_required
 def delete_invoice(invoice_id):
     try:
         invoice = Invoice.query.get_or_404(invoice_id)
@@ -779,12 +863,57 @@ def daily_report():
         start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = report_date.replace(hour=23, minute=59, second=59, microsecond=999999)
         
-        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
+        # Get filtered invoice query based on user role
+        invoice_query = get_user_invoices_query()
+        invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
         total_amount = sum(inv.grand_total for inv in invoices)
         
         return render_template("daily_report.html", invoices=invoices, date=report_date, total_amount=total_amount, count=len(invoices))
     except:
         flash("Invalid date format", "danger")
+        return redirect(url_for("reports"))
+
+
+@app.route("/reports/weekly")
+@login_required
+def weekly_report():
+    week_str = request.args.get("week", "")
+    try:
+        if week_str:
+            # Handle ISO week format: YYYY-Www
+            if "-W" in week_str:
+                year, week = map(int, week_str.split("-W"))
+                # Calculate start of week (Monday)
+                jan1 = datetime(year, 1, 1)
+                days_offset = (week - 1) * 7
+                start = jan1 + timedelta(days=days_offset - jan1.weekday())
+            else:
+                # Handle HTML5 week input format: YYYY-Www
+                parts = week_str.split("-W")
+                if len(parts) == 2:
+                    year, week = int(parts[0]), int(parts[1])
+                    jan1 = datetime(year, 1, 1)
+                    days_offset = (week - 1) * 7
+                    start = jan1 + timedelta(days=days_offset - jan1.weekday())
+                else:
+                    raise ValueError("Invalid week format")
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        else:
+            # Default to current week
+            today = datetime.now()
+            start = today - timedelta(days=today.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        
+        # Get filtered invoice query based on user role
+        invoice_query = get_user_invoices_query()
+        invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
+        total_amount = sum(inv.grand_total for inv in invoices)
+        
+        return render_template("weekly_report.html", invoices=invoices, start_date=start, end_date=end, total_amount=total_amount, count=len(invoices))
+    except Exception as e:
+        flash(f"Invalid week format: {str(e)}", "danger")
         return redirect(url_for("reports"))
 
 
@@ -800,7 +929,9 @@ def monthly_report():
         else:
             end = datetime(year, month + 1, 1) - timedelta(seconds=1)
         
-        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
+        # Get filtered invoice query based on user role
+        invoice_query = get_user_invoices_query()
+        invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).order_by(Invoice.date).all()
         
         # Group by week
         weekly_data = {}
@@ -823,6 +954,10 @@ def monthly_report():
 @login_required
 def customer_report(customer_id):
     customer = Customer.query.get_or_404(customer_id)
+    # Check access - users can only see their own customer
+    if current_user.role == "user" and current_user.customer_id != customer_id:
+        flash("Access denied", "danger")
+        return redirect(url_for("dashboard"))
     invoices = Invoice.query.filter_by(customer_id=customer_id).order_by(desc(Invoice.date)).all()
     total = sum(inv.grand_total for inv in invoices)
     last_visit = invoices[0].date if invoices else None
@@ -852,7 +987,9 @@ def gst_report():
         else:
             end = datetime(year, month + 1, 1) - timedelta(seconds=1)
         
-        invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).all()
+        # Get filtered invoice query based on user role
+        invoice_query = get_user_invoices_query()
+        invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).all()
         total_cgst = sum(inv.cgst for inv in invoices)
         total_sgst = sum(inv.sgst for inv in invoices)
         total_amount = sum(inv.grand_total for inv in invoices)
@@ -866,6 +1003,46 @@ def gst_report():
 # ------------------------------------------------------------
 # Routes - Export Reports
 # ------------------------------------------------------------
+@app.route("/reports/weekly/export")
+@login_required
+def export_weekly_csv():
+    week_str = request.args.get("week", "")
+    try:
+        if week_str:
+            year, week = map(int, week_str.split("-W"))
+            jan1 = datetime(year, 1, 1)
+            days_offset = (week - 1) * 7
+            start = jan1 + timedelta(days=days_offset - jan1.weekday())
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        else:
+            today = datetime.now()
+            start = today - timedelta(days=today.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        
+        # Get filtered invoice query based on user role
+        invoice_query = get_user_invoices_query()
+        invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).all()
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Bill No", "Customer", "Vehicle", "Date", "Amount"])
+        for inv in invoices:
+            writer.writerow([inv.bill_no, inv.customer.name, inv.vehicle.vehicle_number if inv.vehicle else "", inv.date.strftime("%Y-%m-%d"), inv.grand_total])
+        
+        output.seek(0)
+        week_label = week_str if week_str else f"{start.strftime('%Y-%m-%d')}_to_{end.strftime('%Y-%m-%d')}"
+        return send_file(
+            io.BytesIO(output.getvalue().encode("utf-8-sig")),
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=f"weekly_report_{week_label}.csv",
+        )
+    except Exception as e:
+        flash(f"Error exporting report: {str(e)}", "danger")
+        return redirect(url_for("reports"))
+
+
 @app.route("/reports/daily/export")
 @login_required
 def export_daily_csv():
@@ -874,7 +1051,9 @@ def export_daily_csv():
     start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = report_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    invoices = Invoice.query.filter(Invoice.date >= start, Invoice.date <= end).all()
+    # Get filtered invoice query based on user role
+    invoice_query = get_user_invoices_query()
+    invoices = invoice_query.filter(Invoice.date >= start, Invoice.date <= end).all()
     
     output = io.StringIO()
     writer = csv.writer(output)
