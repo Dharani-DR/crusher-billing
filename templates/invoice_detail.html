@@ -191,12 +191,18 @@ body {
     margin: 8mm;
   }
   
-  /* Hide everything by default */
+  /* Hide everything by default - only show bill/waybill content */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  
   body * {
     visibility: hidden !important;
   }
   
-  /* Show only print section */
+  /* Show only print section (bill/waybill) */
   #print-section, #print-section * {
     visibility: visible !important;
   }
@@ -207,11 +213,23 @@ body {
     top: 0;
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding: 20px;
     box-shadow: none !important;
     border: none !important;
     background: white !important;
     page-break-inside: avoid;
+  }
+  
+  /* Hide all navigation, buttons, and non-print elements */
+  .no-print,
+  header,
+  nav,
+  .btn,
+  button:not(.print-only),
+  .flex.gap-2,
+  .max-w-4xl > .flex {
+    display: none !important;
+    visibility: hidden !important;
   }
   
   /* Remove shadows and animations */
@@ -231,6 +249,7 @@ body {
   #print-section table {
     width: 100%;
     page-break-inside: avoid;
+    border-collapse: collapse;
   }
   
   #print-section tr {
@@ -251,12 +270,19 @@ body {
     margin-top: 40px;
     width: 100%;
     page-break-inside: avoid;
+    position: relative;
   }
   
   /* Color adjustment for print */
   #print-section * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  
+  /* Ensure proper spacing for print */
+  #print-section .invoice-container {
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }
 </style>

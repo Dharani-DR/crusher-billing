@@ -105,13 +105,13 @@ A comprehensive, mobile-responsive GST billing platform for crusher plant busine
 ## Tech Stack
 
 - **Backend**: Flask 3.0.0
-- **Database**: SQLAlchemy ORM (SQLite locally, PostgreSQL on Render)
+- **Database**: PostgreSQL with SQLAlchemy ORM (via DATABASE_URL)
 - **Authentication**: Flask-Login
 - **PDF Generation**: ReportLab
 - **AI Forecasting**: Facebook Prophet
 - **Scheduling**: APScheduler
 - **Frontend**: Bootstrap 5, Chart.js
-- **Deployment**: Gunicorn (Render)
+- **Deployment**: Vercel (serverless) or Gunicorn (Render)
 
 ## Installation
 
@@ -138,11 +138,20 @@ A comprehensive, mobile-responsive GST billing platform for crusher plant busine
    # Edit .env with your configuration
    ```
 
-5. **Initialize database**
-   - Visit `http://localhost:5000/setup` in your browser
-   - This creates the database and default users:
-     - Admin: `admin` / `admin123`
-     - User: `user` / `user123`
+5. **Set up PostgreSQL database**
+   - Create a PostgreSQL database (e.g., using Neon, Supabase, or local PostgreSQL)
+   - Set the `DATABASE_URL` environment variable:
+     ```bash
+     export DATABASE_URL="postgresql://user:password@host:port/database"
+     ```
+   - Run Alembic migrations:
+     ```bash
+     alembic upgrade head
+     ```
+   - Initialize default data (optional):
+     ```bash
+     python scripts/init_db.py
+     ```
 
 6. **Run the application**
    ```bash
@@ -242,29 +251,46 @@ crusher-billing/
      - Install dependencies from `requirements.txt`
      - Deploy your Flask app
 
-5. **Access your app**
+5. **Configure Environment Variables in Vercel Dashboard**:
+   - `DATABASE_URL`: Your PostgreSQL connection string (required)
+     - Example: `postgresql://user:password@host:port/database`
+     - For Neon: Copy connection string from Neon dashboard
+     - For Vercel Postgres: Automatically provided when you add Vercel Postgres
+   - `SECRET_KEY`: Generate a secure secret key for Flask sessions
+
+6. **Run Database Migrations**:
+   - After first deployment, run migrations:
+     ```bash
+     alembic upgrade head
+     ```
+   - Or use Vercel CLI: `vercel env pull` then `alembic upgrade head`
+
+7. **Access your app**
    - After deployment, visit: `https://your-project.vercel.app`
-   - Initialize database: `https://your-project.vercel.app/setup`
+   - Default admin credentials: `admin` / `nrd`
 
 **Important Notes for Vercel Deployment**:
 
-- **Database**: The app uses in-memory SQLite on Vercel (data doesn't persist between function invocations). For production, consider:
-  - **Vercel Postgres** (recommended) - Add via Vercel dashboard
-  - **External database** (PostgreSQL, MySQL, etc.) - Update `SQLALCHEMY_DATABASE_URI` in environment variables
+- **Database**: PostgreSQL is required. The app uses `DATABASE_URL` environment variable.
+  - **Recommended**: Neon (free tier available) or Vercel Postgres
+  - Connection pooling is configured automatically
   
 - **Scheduled Tasks**: APScheduler removed for serverless compatibility. Use Vercel Cron Jobs or external services.
 
-- **File Storage**: Static files (fonts, images) must be in the repository. Database files are not persisted.
+- **File Storage**: Static files (fonts, images) must be in the repository.
 
 ### Deployment on Render
 
 1. **Create a new Web Service** on Render
 2. **Connect your repository**
-3. **Set environment variables**:
+3. **Add PostgreSQL Database** (if not already added)
+   - Render provides a PostgreSQL database automatically
+   - Copy the `DATABASE_URL` from the database dashboard
+4. **Set environment variables**:
+   - `DATABASE_URL`: PostgreSQL connection string (from Render database)
    - `SECRET_KEY`: Generate a secure secret key
-   - `DATABASE_URL`: PostgreSQL connection string (provided by Render)
-4. **Build Command**: `pip install -r requirements.txt`
-5. **Start Command**: `gunicorn app:app`
+5. **Build Command**: `pip install -r requirements.txt && alembic upgrade head`
+6. **Start Command**: `gunicorn app:app`
 
 ## Database Models
 

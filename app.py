@@ -41,35 +41,12 @@ except ImportError:
 # ------------------------------------------------------------
 # Flask configuration
 # ------------------------------------------------------------
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "crusher-secret")
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 8 hour session timeout
-
 RUNNING_ON_VERCEL = os.getenv("VERCEL", "0") == "1"
 
-configure_database(app)
-
 # ------------------------------------------------------------
-# Tamil font registration for PDF outputs
-# ------------------------------------------------------------
-FONT_PATH = os.path.join("static", "fonts", "NotoSansTamil-Regular.ttf")
-if os.path.exists(FONT_PATH):
-    try:
-        pdfmetrics.registerFont(TTFont("TamilFont", FONT_PATH))
-        print("✅ Tamil font registered successfully")
-    except Exception as err:
-        print("⚠️ Tamil font registration failed:", err)
-else:
-    print("⚠️ Tamil font missing at static/fonts/NotoSansTamil-Regular.ttf")
-
-# ------------------------------------------------------------
-# Login manager setup
+# Login manager setup (will be initialized in create_app)
 # ------------------------------------------------------------
 login_manager = LoginManager()
-login_manager.init_app(app)
 login_manager.login_view = "login"
 
 
@@ -338,65 +315,15 @@ def get_user_invoices_query():
 # Database initialisation
 # ------------------------------------------------------------
 def init_db():
-    """Create tables and seed default data if needed."""
+    """Create tables and seed default data if needed.
+    Note: For production, use Alembic migrations instead of db.create_all()
+    """
     if not is_database_ready():
         return False
     try:
+        # Only create tables if they don't exist (for initial setup)
+        # In production, use: alembic upgrade head
         db.create_all()
-        
-        # Auto-migrate: Add new columns if they don't exist
-        try:
-            from sqlalchemy import inspect as sql_inspect
-            inspector = sql_inspect(db.engine)
-            if inspector.has_table('users'):
-                columns = [col['name'] for col in inspector.get_columns('users')]
-                
-                if 'email' not in columns:
-                    with db.engine.connect() as conn:
-                        conn.execute(db.text('ALTER TABLE users ADD COLUMN email VARCHAR(150)'))
-                        conn.commit()
-                    print("✅ Added email column to users table")
-                
-                if 'name' not in columns:
-                    with db.engine.connect() as conn:
-                        conn.execute(db.text('ALTER TABLE users ADD COLUMN name VARCHAR(200)'))
-                        conn.commit()
-                    print("✅ Added name column to users table")
-                
-                if 'status' not in columns:
-                    with db.engine.connect() as conn:
-                        conn.execute(db.text("ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT 'active'"))
-                        conn.commit()
-                    print("✅ Added status column to users table")
-        except Exception as e:
-            print(f"⚠️ Migration note: {e}")
-        
-        # Auto-migrate: Add messaging columns to settings table
-        try:
-            from sqlalchemy import inspect as sql_inspect
-            inspector = sql_inspect(db.engine)
-            if inspector.has_table('settings'):
-                columns = [col['name'] for col in inspector.get_columns('settings')]
-                
-                messaging_fields = [
-                    ("sms_provider", "VARCHAR(50) DEFAULT 'twilio'"),
-                    ("sms_api_secret", "VARCHAR(200)"),
-                    ("sms_api_url", "VARCHAR(500)"),
-                    ("whatsapp_provider", "VARCHAR(50) DEFAULT 'twilio'"),
-                    ("whatsapp_api_key", "VARCHAR(200)"),
-                    ("whatsapp_api_url", "VARCHAR(500)"),
-                    ("auto_send_sms", "BOOLEAN DEFAULT false"),
-                    ("auto_send_whatsapp", "BOOLEAN DEFAULT false"),
-                ]
-                
-                for field_name, field_type in messaging_fields:
-                    if field_name not in columns:
-                        with db.engine.connect() as conn:
-                            conn.execute(db.text(f'ALTER TABLE settings ADD COLUMN {field_name} {field_type}'))
-                            conn.commit()
-                        print(f"✅ Added {field_name} column to settings table")
-        except Exception as e:
-            print(f"⚠️ Settings migration note: {e}")
 
         # Create default admin user
         admin = User.query.filter_by(username="admin").first()
@@ -442,11 +369,26 @@ def init_db():
 
 @app.before_request
 def ensure_database():
+    """Ensure database connection is ready"""
     if not is_database_ready():
         endpoint = request.endpoint or ""
-        if endpoint in {"setup", "static"} or request.path.startswith("/static"):
+        if endpoint in {"static", "ping"} or request.path.startswith("/static"):
             return
-        return redirect(url_for("setup"))
+        # Show readable error instead of redirecting to setup
+        return render_template(
+            "error.html",
+            error="Database connection not configured. Please set DATABASE_URL environment variable."
+        ), 500
+    
+    # Test database connection
+    try:
+        db.session.execute(db.text("SELECT 1"))
+    except Exception as e:
+        return render_template(
+            "error.html",
+            error=f"Database connection failed: {str(e)}. Please check your DATABASE_URL."
+        ), 500
+    
     if not getattr(g, "_db_initialized", False):
         init_db()
         g._db_initialized = True
@@ -1830,11 +1772,7 @@ def ping():
     return jsonify({"status": "ok"})
 
 
-@app.route("/setup")
-def setup():
-    """Setup instructions when DATABASE_URL is missing"""
-    database_url = os.getenv("DATABASE_URL", "")
-    return render_template("setup.html", database_url=database_url)
+# Setup page removed - PostgreSQL is external and configured via DATABASE_URL
 
 
 # ------------------------------------------------------------
@@ -1853,12 +1791,49 @@ def handle_exception(err):
 # App factory for Vercel
 # ------------------------------------------------------------
 def create_app():
+    """Create and configure Flask app for production"""
+    app = Flask(__name__)
+    app.secret_key = os.getenv("SECRET_KEY", "crusher-secret")
+    app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 8 hour session timeout
+    
+    # Configure database
+    configure_database(app)
+    
+    # Initialize login manager
+    login_manager.init_app(app)
+    
+    # Tamil font registration for PDF outputs
+    FONT_PATH = os.path.join("static", "fonts", "NotoSansTamil-Regular.ttf")
+    if os.path.exists(FONT_PATH):
+        try:
+            pdfmetrics.registerFont(TTFont("TamilFont", FONT_PATH))
+            print("✅ Tamil font registered successfully")
+        except Exception as err:
+            print("⚠️ Tamil font registration failed:", err)
+    else:
+        print("⚠️ Tamil font missing at static/fonts/NotoSansTamil-Regular.ttf")
+    
+    # Test connection on startup
     if is_database_ready():
-        with app.app_context():
-            init_db()
+        try:
+            with app.app_context():
+                # Test connection
+                db.session.execute(db.text("SELECT 1"))
+                print("✅ Database connection successful")
+                # Initialize database (creates tables if needed)
+                init_db()
+        except Exception as e:
+            print(f"⚠️ Database connection test failed: {e}")
+            print("⚠️ App will continue but database operations may fail")
+    else:
+        print("⚠️ DATABASE_URL not set - database features will be unavailable")
     return app
 
 
+# Create app instance
 app = create_app()
 
 if __name__ == "__main__":

@@ -8,11 +8,17 @@ from sqlalchemy import engine_from_config, pool
 # access to the values within the .ini file in use.
 config = context.config
 
+# Read DATABASE_URL from environment
 database_url = os.getenv("DATABASE_URL", "")
 if database_url:
+    # Ensure postgres URLs use psycopg2 driver
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
+else:
+    # If no DATABASE_URL, try to get from alembic.ini (for backward compatibility)
+    # But in production, DATABASE_URL should always be set
+    pass
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -21,7 +27,9 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
+# Import all models to ensure they're registered
 from app import db  # noqa: E402
+from app import User, Customer, Vehicle, Item, Invoice, InvoiceItem, Waybill, Settings, AuditLog  # noqa: E402, F401
 
 target_metadata = db.Model.metadata
 

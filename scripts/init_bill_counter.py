@@ -1,22 +1,15 @@
+"""
+Initialize bill counter - DEPRECATED
+This script is no longer needed as the app uses PostgreSQL with proper migrations.
+Use Alembic migrations instead: alembic upgrade head
+"""
 import os
 import sys
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from models import Base, Bill  # noqa: E402
-
-def main():
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'instance', 'data.db')
-    db_uri = f"sqlite:///{os.path.abspath(db_path).replace(os.sep, '/')}"
-    engine = create_engine(db_uri, echo=False)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    Base.metadata.create_all(engine)
-    last_bill = session.query(Bill).order_by(Bill.id.desc()).first()
-    print(f"Initialized. Last bill: {last_bill.bill_no if last_bill else 'None'}")
-
-if __name__ == "__main__":
-    main()
+print("⚠️ This script is deprecated.")
+print("The app now uses PostgreSQL with Alembic migrations.")
+print("To initialize the database, run: alembic upgrade head")
+print("To create initial data, use the app's init_db() function or run: python scripts/init_db.py")
+sys.exit(1)
 
 
